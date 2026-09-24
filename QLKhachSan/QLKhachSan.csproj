@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="../Database/MigrateV2.sql" LogicalName="QLKhachSan.MigrateV2.sql" />
+    <EmbeddedResource Include="../Database/MigrateV3.sql" LogicalName="QLKhachSan.MigrateV3.sql" />
+    <EmbeddedResource Include="../Database/MigrateV4.sql" LogicalName="QLKhachSan.MigrateV4.sql" />
+    <EmbeddedResource Include="../Database/MigrateV5.sql" LogicalName="QLKhachSan.MigrateV5.sql" />
+  </ItemGroup>
+
+</Project>

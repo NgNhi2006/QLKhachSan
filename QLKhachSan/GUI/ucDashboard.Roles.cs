@@ -1,0 +1,70 @@
+using QLKhachSan.BLL;
+
+namespace QLKhachSan.GUI;
+
+public partial class ucDashboard
+{
+    private string DashboardTitle() => user.Role switch
+    {
+        "Admin" => "DASHBOARD QUẢN TRỊ",
+        "Manager" => "DASHBOARD QUẢN LÝ",
+        "Reception" => "DASHBOARD LỄ TÂN",
+        "Accountant" => "DASHBOARD KẾ TOÁN",
+        _ => "DASHBOARD"
+    };
+
+    private void ConfigureRoleDashboard()
+    {
+        lblHeaderTitle.Text=$"{DashboardTitle()} • {user.Username}";
+        lblToolsTitle.Text=user.Role switch
+        {
+            "Admin" => "QUẢN TRỊ HỆ THỐNG",
+            "Manager" => "ĐIỀU HÀNH KHÁCH SẠN",
+            "Reception" => "NGHIỆP VỤ LỄ TÂN",
+            "Accountant" => "TÀI CHÍNH - KẾ TOÁN",
+            _ => "CHỨC NĂNG"
+        };
+        if(user.Role=="Accountant")
+        {
+            lblCard1Title.Text="HÓA ĐƠN HÔM NAY";
+            lblCard2Title.Text="DOANH THU HÓA ĐƠN";
+            lblCard3Title.Text="KHOẢN THU";
+            lblCard4Title.Text="KHOẢN HOÀN";
+            lblCard1Sub.Text="Đã phát hành";
+            lblCard2Sub.Text="Trong ngày";
+            lblCard3Sub.Text="Cọc và thanh toán";
+            lblCard4Sub.Text="Hoàn cho khách";
+            lblCard5Title.Text="DOANH THU HÔM NAY";
+            tabThongKe.Text="THỐNG KÊ DOANH THU";
+            txtTimPhong.Visible=false;btnTimPhong.Visible=false;
+            tlpBody.ColumnStyles[2].Width=0;
+            AddTool("Báo cáo tài chính",600,ShowInvoices);
+            AddTool("Các khoản thu / hoàn",645,ShowCashFlow);
+            AddTool("Thống kê doanh thu",690,ShowRevenueChart);
+        }
+        else if(user.Role=="Manager")
+        {
+            lblCard1Title.Text="CÔNG SUẤT PHÒNG";
+            lblCard2Title.Text="PHÒNG SẴN SÀNG";
+            lblCard3Title.Text="LỊCH ĐẶT SẮP ĐẾN";
+            lblCard4Title.Text="KHÁCH SẮP TRẢ";
+            tabThongKe.Text="DOANH THU VÀ THỐNG KÊ";
+        }
+        else if(user.Role=="Reception")
+        {
+            tlpCards.ColumnStyles[4].Width=0;
+            btnQuanLyKhach.Text="Khách hàng / Hóa đơn";
+            lblCard1Title.Text="PHÒNG ĐANG Ở";
+            lblCard2Title.Text="PHÒNG TRỐNG";
+            lblCard3Title.Text="CHỜ NHẬN PHÒNG";
+            lblCard4Title.Text="CHỜ TRẢ PHÒNG";
+            tabMatrix.Text="TÌNH TRẠNG PHÒNG";
+            tabLichTrinh.Text="LỊCH NHẬN / TRẢ";
+        }
+        else
+        {
+            lblCard1Title.Text="CÔNG SUẤT PHÒNG";
+            tabThongKe.Text="TOÀN BỘ DOANH THU";
+        }
+    }
+}

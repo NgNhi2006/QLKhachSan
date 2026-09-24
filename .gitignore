@@ -1,0 +1,6 @@
+.vs/
+**/bin/
+**/obj/
+*.user
+artifacts/
+review-backup/
