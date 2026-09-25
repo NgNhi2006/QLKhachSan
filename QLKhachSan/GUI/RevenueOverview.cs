@@ -6,25 +6,30 @@ namespace QLKhachSan.GUI;
 internal sealed class RevenueOverview : UserControl
 {
     private readonly ComboBox period=Ui.Combo(new[]{"7 ngày gần nhất","30 ngày gần nhất"});
-    private readonly Label total=new(),average=new(),best=new(),range=new();
+    private readonly Label total=new(),average=new(),best=new(),today=new(),range=new();
+    private readonly Button details=new() {Text="XEM BÁO CÁO CHI TIẾT"};
     private readonly RevenuePlot trend=new(false),categories=new(true);
     public int Days=>period.SelectedIndex==1?30:7;
     public event EventHandler? PeriodChanged;
+    public event EventHandler? DetailsRequested;
     public RevenueOverview()
     {
-        BackColor=AppTheme.Canvas;Padding=new Padding(18);MinimumSize=new Size(550,570);
+        BackColor=AppTheme.Canvas;Padding=new Padding(18);MinimumSize=new Size(550,450);
         var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,BackColor=AppTheme.Canvas};
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute,74));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,98));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         var header=new Panel {Dock=DockStyle.Fill};
         header.Controls.Add(new Label {Text="Tổng quan doanh thu",Font=AppTheme.Title,ForeColor=AppTheme.Ink,Location=new Point(0,0),AutoSize=true});
         range.Font=AppTheme.Small;range.ForeColor=AppTheme.Muted;range.Location=new Point(2,38);range.AutoSize=true;header.Controls.Add(range);
-        period.Width=170;period.Dock=DockStyle.None;period.Anchor=AnchorStyles.Top|AnchorStyles.Right;period.Font=AppTheme.Body;header.Controls.Add(period);
-        header.Resize+=(_,_)=>period.Location=new Point(Math.Max(0,header.Width-period.Width),6);
+        period.Width=165;period.Dock=DockStyle.None;period.Anchor=AnchorStyles.Top|AnchorStyles.Right;period.Font=AppTheme.Body;header.Controls.Add(period);
+        details.Width=180;details.Height=32;AppTheme.Button(details);header.Controls.Add(details);
+        details.Click+=(_,_)=>DetailsRequested?.Invoke(this,EventArgs.Empty);
+        header.Resize+=(_,_)=>{details.Location=new Point(Math.Max(0,header.Width-details.Width),4);period.Location=new Point(Math.Max(0,header.Width-details.Width-period.Width-12),6);};
         period.SelectedIndexChanged+=(_,_)=>PeriodChanged?.Invoke(this,EventArgs.Empty);
-        var metrics=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,Margin=new Padding(0,0,0,14)};
-        foreach(var label in new[]{total,average,best})metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/3));
-        metrics.Controls.Add(Metric("TỔNG DOANH THU",total),0,0);metrics.Controls.Add(Metric("TRUNG BÌNH / NGÀY",average),1,0);metrics.Controls.Add(Metric("NGÀY CAO NHẤT",best),2,0);
+        var metrics=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,Margin=new Padding(0,0,0,14)};
+        for(var i=0;i<4;i++)metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
+        metrics.Controls.Add(Metric("TỔNG TRONG KỲ",total),0,0);metrics.Controls.Add(Metric("HÔM NAY",today),1,0);
+        metrics.Controls.Add(Metric("TRUNG BÌNH / NGÀY",average),2,0);metrics.Controls.Add(Metric("NGÀY CAO NHẤT",best),3,0);
         var plots=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,Margin=Padding.Empty};
         plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,66));plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,34));
         trend.Dock=DockStyle.Fill;categories.Dock=DockStyle.Fill;trend.Margin=new Padding(0,0,8,0);categories.Margin=new Padding(8,0,0,0);
@@ -41,7 +46,8 @@ internal sealed class RevenueOverview : UserControl
     public void SetData(DashboardData data)
     {
         var rows=data.Trend??[];var sum=rows.Sum(r=>r.Total);
-        total.Text=$"{sum:N0} đ";average.Text=$"{(rows.Count==0?0:sum/rows.Count):N0} đ";
+        total.Text=$"{sum:N0} đ";today.Text=$"{data.Revenue.Sum(x=>x.Total):N0} đ";
+        average.Text=$"{(rows.Count==0?0:sum/rows.Count):N0} đ";
         var highest=rows.OrderByDescending(r=>r.Total).FirstOrDefault();
         best.Text=highest is {Total:>0}?$"{highest.Day:dd/MM} · {RevenuePlot.Short(highest.Total)}":"Chưa phát sinh";
         range.Text=rows.Count>0?$"{rows[0].Day:dd/MM/yyyy} – {rows[^1].Day:dd/MM/yyyy}  •  Theo ngày ghi nhận":"Theo ngày ghi nhận";

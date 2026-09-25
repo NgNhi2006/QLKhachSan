@@ -17,6 +17,23 @@ public sealed partial class HotelTransaction
         if (conflicts > 0) throw new BusinessException("Phòng đã có lịch trong khoảng ngày này. Hãy chọn phòng hoặc thời gian khác.");
     }
     public Task<List<Stay>> StayHistoryAsync(string search) => Query("SELECT TOP(500) "+StayColumns+" FROM dbo.Stays WHERE @p0=N'' OR CHARINDEX(@p0,GuestName)>0 OR CHARINDEX(@p0,IdentityNumber)>0 OR CHARINDEX(@p0,Phone)>0 ORDER BY Id DESC",MapStay,search);
+    public Task<List<TodayScheduleItem>> TodayScheduleAsync(DateTime day) => Query(@"
+SELECT s.Id,r.Number,s.GuestName,s.Phone,N'Chờ nhận',s.Arrival
+FROM dbo.Stays s JOIN dbo.Rooms r ON r.Id=s.RoomId
+WHERE s.Status='Reserved' AND s.Arrival>=@p0 AND s.Arrival<@p1
+UNION ALL
+SELECT s.Id,r.Number,s.GuestName,s.Phone,N'Đã nhận',s.CheckIn
+FROM dbo.Stays s JOIN dbo.Rooms r ON r.Id=s.RoomId
+WHERE s.CheckIn>=@p0 AND s.CheckIn<@p1
+UNION ALL
+SELECT s.Id,r.Number,s.GuestName,s.Phone,N'Chờ trả',s.Departure
+FROM dbo.Stays s JOIN dbo.Rooms r ON r.Id=s.RoomId
+WHERE s.Status='Occupied' AND s.Departure>=@p0 AND s.Departure<@p1
+UNION ALL
+SELECT i.StayId,i.RoomNumber,i.GuestName,s.Phone,N'Đã trả',i.Issued
+FROM dbo.Invoices i JOIN dbo.Stays s ON s.Id=i.StayId
+WHERE i.Issued>=@p0 AND i.Issued<@p1
+ORDER BY 6,1",r=>new TodayScheduleItem(r.GetInt64(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetDateTime(5)),day.Date,day.Date.AddDays(1));
     public Task<int> AddDepositAsync(long id,decimal amount,DateTime? holdUntil) => Execute("UPDATE dbo.Stays SET Deposit=Deposit+@p1,HoldUntil=@p2,Version=Version+1 WHERE Id=@p0",id,amount,holdUntil);
     public async Task UpdateBookingAsync(Stay stay,Room room,GuestInput guest,DateTime arrival,DateTime departure,DateTime receiveBy)
     {

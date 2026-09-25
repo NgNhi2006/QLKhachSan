@@ -7,6 +7,7 @@ public partial class ucDashboard
     private readonly Label lblDonSummary=new();
     private readonly Label lblDoiSummary=new();
     private readonly Label lblVipSummary=new();
+    private readonly HashSet<Button> paintedSidebarButtons=[];
     private void ApplyAppearance()
     {
         SuspendLayout();Font=AppTheme.Body;BackColor=AppTheme.Canvas;
@@ -122,15 +123,30 @@ public partial class ucDashboard
         var y=txtTimPhong.Visible?88:52;
         foreach(var button in buttons)
         {
+            var title=button.AccessibleName??button.Text;
+            button.AccessibleName=title;
             button.Location=new Point(12,y);button.Size=new Size(width,36);
             AppTheme.Button(button,button==btnCheckIn||button==btnDatLichPhong);
             button.Font=AppTheme.Small;
-            DecorateButton(button,UiIcons.Kind(button.Text),Color.White,8);
+            DecorateButton(button,UiIcons.Kind(title),Color.White,8);
             if(button!=btnCheckIn && button!=btnDatLichPhong)
             {
                 button.BackColor=AppTheme.Navy;button.ForeColor=Color.FromArgb(217,226,238);
                 button.FlatAppearance.BorderSize=0;button.TextAlign=ContentAlignment.MiddleLeft;
                 button.FlatAppearance.MouseOverBackColor=Color.FromArgb(37,54,78);
+                button.FlatAppearance.MouseDownBackColor=Color.FromArgb(46,68,98);
+            }
+            button.UseVisualStyleBackColor=false;
+            if(paintedSidebarButtons.Add(button))
+            {
+                button.Text=string.Empty;
+                button.Paint+=(_,e)=>
+                {
+                    var label=button.AccessibleName??string.Empty;
+                    var bounds=new Rectangle(36,0,Math.Max(0,button.Width-40),button.Height);
+                    using var fill=new SolidBrush(button.BackColor);e.Graphics.FillRectangle(fill,bounds);
+                    TextRenderer.DrawText(e.Graphics,label,AppTheme.Small,bounds,Color.White,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+                };
             }
             y+=41;
         }

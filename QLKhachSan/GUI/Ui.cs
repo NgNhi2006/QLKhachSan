@@ -93,6 +93,7 @@ internal sealed class InputDialog : Form
         if(height>0) control.Height=height;
         if(labelsBeside)
         {
+            fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));fields.RowCount=fieldRow+1;
             var caption=new Label {Text=label,Font=AppTheme.Body,ForeColor=AppTheme.Muted,AutoSize=true,Dock=DockStyle.Top,Margin=new Padding(0,4,12,14)};
             fields.Controls.Add(caption,0,fieldRow);
             fields.Controls.Add(control,1,fieldRow++);
@@ -101,16 +102,25 @@ internal sealed class InputDialog : Form
         else
         {
             Label? caption=null;
-            if(!string.IsNullOrEmpty(label)){caption=new Label {Text=label,Font=AppTheme.Bold,ForeColor=AppTheme.Muted,AutoSize=true,Margin=new Padding(0,8,0,6)};fields.Controls.Add(caption);}
-            fields.Controls.Add(control);
+            if(!string.IsNullOrEmpty(label))
+            {
+                caption=new Label {Text=label,Font=AppTheme.Bold,ForeColor=AppTheme.Muted,AutoSize=true,Margin=new Padding(0,8,0,6)};
+                fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));fields.RowCount=++fieldRow;fields.Controls.Add(caption,0,fieldRow-1);
+            }
+            fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));fields.RowCount=++fieldRow;fields.Controls.Add(control,0,fieldRow-1);
             return caption;
         }
     }
     public void Note(string text)
     {
         var note=new Label {Text=text,ForeColor=AppTheme.Muted,Font=AppTheme.Small,AutoSize=true,MaximumSize=new Size(900,0),Margin=new Padding(0,12,0,12)};
-        if(labelsBeside){fields.Controls.Add(note,0,fieldRow++);fields.SetColumnSpan(note,2);}
-        else fields.Controls.Add(note);
+        fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));fields.RowCount=fieldRow+1;
+        fields.Controls.Add(note,0,fieldRow++);
+        if(labelsBeside)fields.SetColumnSpan(note,2);
+    }
+    public void ScrollTo(Control control)
+    {
+        if(IsHandleCreated)BeginInvoke(() => fields.ScrollControlIntoView(control));
     }
     public void AddActionConfirmation(string label,CheckBox confirmation)
     {

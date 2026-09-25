@@ -22,6 +22,7 @@ public sealed partial class HotelService
         return stay.HoldUntil<=await db.NowAsync()?0:stay.Deposit;
     });
     public Task<List<Stay>> StayHistoryAsync(string search) => OperationsRead(db=>db.StayHistoryAsync(search.Trim()));
+    public Task<List<TodayScheduleItem>> TodayScheduleAsync(DateTime day) => OperationsRead(db=>db.TodayScheduleAsync(day));
     public Task<List<ServiceLine>> StayOrdersAsync(long stay) => OperationsRead(db=>db.AllOrdersAsync(stay));
     public Task UpdateBookingAsync(Stay selected,Room target,GuestInput guest,DateTime arrival,int days,DateTime receiveBy,string reason) => Write(async db=>
     {

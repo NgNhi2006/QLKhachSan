@@ -10,10 +10,31 @@ public partial class ucDashboard
     private ComboBox StayCombo() => Ui.Combo(data.Stays.Where(s=>s.Status==StayStatus.Occupied).Select(s=>new StayChoice(s,$"P.{StayRoom(s)?.Number} — {s.Guest}")));
     private Stay? SelectStay(string title)
     {
-        using var dialog=new InputDialog(title,520,260);
-        var combo=StayCombo();if(combo.Items.Count==0)throw new BusinessException("Không có phòng đang ở.");
-        dialog.Add("Phòng đang ở",combo);dialog.Action("CHỌN",()=>Task.CompletedTask);
-        return dialog.ShowDialog(this)==DialogResult.OK && combo.SelectedItem is StayChoice item?item.Stay:null;
+        var occupied=data.Stays.Where(s=>s.Status==StayStatus.Occupied)
+            .OrderBy(s=>StayRoom(s)?.Number).Select(s=>new StayChoice(s,$"P.{StayRoom(s)?.Number}  •  {s.Guest}  •  {s.Phone}"))
+            .ToArray();
+        if(occupied.Length==0)throw new BusinessException("Không có phòng đang ở.");
+        using var dialog=new InputDialog(title,650,Math.Min(650,Screen.FromControl(this).WorkingArea.Height-40));
+        var search=Ui.Text();search.PlaceholderText="Gõ số phòng, tên khách hoặc số điện thoại...";
+        var list=new ListBox {Height=390,IntegralHeight=false,Font=new Font("Segoe UI",11)};
+        void Filter()
+        {
+            var query=search.Text.Trim();
+            list.BeginUpdate();list.Items.Clear();
+            list.Items.AddRange(occupied.Where(x=>query.Length==0 || x.Label.Contains(query,StringComparison.CurrentCultureIgnoreCase)).Cast<object>().ToArray());
+            list.EndUpdate();
+            if(list.Items.Count>0)list.SelectedIndex=0;
+        }
+        search.TextChanged+=(_,_)=>Filter();
+        search.KeyDown+=(_,e)=>
+        {
+            if(e.KeyCode==Keys.Down && list.Items.Count>0){list.Focus();list.SelectedIndex=0;e.Handled=true;}
+        };
+        dialog.Add("Tìm phòng đang ở",search);dialog.Add($"{occupied.Length} phòng đang ở",list);
+        var select=dialog.Action(title.Contains("dịch vụ",StringComparison.OrdinalIgnoreCase)?"CHỌN LƯỢT Ở":"THANH TOÁN",()=>Task.CompletedTask);
+        list.DoubleClick+=(_,_)=>select.PerformClick();
+        Filter();dialog.Shown+=(_,_)=>search.Focus();
+        return dialog.ShowDialog(this)==DialogResult.OK && list.SelectedItem is StayChoice item?item.Stay:null;
     }
     private async Task RoomAction(Room room)
     {
@@ -94,13 +115,63 @@ public partial class ucDashboard
     }
     private async void btnDoiPhong_Click(object? sender,EventArgs e)=>await Run(()=>
     {
-        using var dialog=new InputDialog("Chuyển phòng",560,390);var from=StayCombo();var to=Ui.Combo(data.Rooms.Where(r=>r.Status==RoomStatus.Trong));
-        if(from.Items.Count==0 || to.Items.Count==0)throw new BusinessException("Cần phòng đang ở và phòng trống để chuyển.");
-        dialog.Add("Lượt lưu trú",from);dialog.Add("Phòng mới",to);
-        dialog.Note("Giá phòng cũ được giữ cho thời gian đã ở. Phần thời gian sau chuyển tính theo giá phòng mới; lượt ở chỉ làm tròn ngày một lần khi trả phòng.");
+        using var dialog=new InputDialog("Chuyển phòng",850,Math.Min(790,Screen.FromControl(this).WorkingArea.Height-30));
+        var from=Ui.Combo(data.Stays.Where(s=>s.Status==StayStatus.Occupied).OrderBy(s=>StayRoom(s)?.Number)
+            .Select(s=>new StayChoice(s,$"P.{StayRoom(s)?.Number} — {s.Guest} — {s.Phone}")));
+        var available=data.Rooms.Where(r=>r.Status==RoomStatus.Trong).OrderBy(r=>r.Number).ToArray();
+        if(from.Items.Count==0 || available.Length==0)throw new BusinessException("Cần phòng đang ở và phòng trống để chuyển.");
+        var current=new Label {Height=106,BackColor=AppTheme.Canvas,ForeColor=AppTheme.Ink,Padding=new Padding(12,8,8,8)};
+        var search=Ui.Text();search.PlaceholderText="Tìm theo số hoặc loại phòng...";
+        var roomGroups=new TabControl {Height=190,Font=AppTheme.Bold};
+        var groupLists=new ListBox[3];
+        var groupNames=new[]{"Phòng đơn","Phòng đôi","VIP / loại khác"};
+        for(var i=0;i<groupLists.Length;i++)
+        {
+            var page=new TabPage(groupNames[i]);roomGroups.TabPages.Add(page);
+            var roomList=new ListBox {Dock=DockStyle.Fill,IntegralHeight=false,HorizontalScrollbar=true,Font=AppTheme.Body};
+            page.Controls.Add(roomList);groupLists[i]=roomList;
+        }
+        var next=new Label {Height=68,BackColor=Color.FromArgb(232,240,255),ForeColor=AppTheme.Ink,Padding=new Padding(12,8,8,8)};
+        dialog.Add("Lượt lưu trú cần chuyển",from);dialog.Add("Phòng hiện tại",current);
+        dialog.Add("Tìm phòng trống",search);dialog.Add("Chọn phòng mới theo loại",roomGroups);dialog.Add("Thông tin phòng mới",next);
+        dialog.Note("Giá phòng cũ áp dụng cho thời gian đã ở; sau khi chuyển tính theo giá phòng mới. Phòng cũ sẽ chuyển sang trạng thái đang dọn.");
+        void Preview()
+        {
+            if(from.SelectedItem is not StayChoice choice)return;
+            var old=StayRoom(choice.Stay);
+            current.Text=$"P.{old?.Number} • {old?.Type}  |  {choice.Stay.Guest}\nGiá hiện tại: {old?.Rate:N0} đ/ngày\nHạn trả: {choice.Stay.Departure:dd/MM/yyyy HH:mm}";
+            var selectedIndex=roomGroups.SelectedIndex;
+            if(selectedIndex>=0 && selectedIndex<groupLists.Length && groupLists[selectedIndex].SelectedItem is Room room)
+                next.Text=$"P.{room.Number} • {room.Type}\nGiá mới: {room.Rate:N0} đ/ngày  |  Chênh lệch: {room.Rate-(old?.Rate??0):+#,##0;-#,##0;0} đ/ngày";
+            else next.Text="Không có phòng phù hợp.";
+        }
+        void FilterRooms()
+        {
+            var query=search.Text.Trim();
+            for(var i=0;i<groupLists.Length;i++)
+            {
+                var list=groupLists[i];var previous=(list.SelectedItem as Room)?.Id;
+                var matches=available.Where(r=>(i==0?r.Type=="Đơn":i==1?r.Type=="Đôi":r.Type!="Đơn" && r.Type!="Đôi")
+                    && (query.Length==0 || r.Number.Contains(query,StringComparison.CurrentCultureIgnoreCase)
+                        || r.Type.Contains(query,StringComparison.CurrentCultureIgnoreCase))).ToArray();
+                list.BeginUpdate();list.Items.Clear();list.Items.AddRange(matches.Cast<object>().ToArray());
+                list.HorizontalExtent=matches.Length==0?0:matches.Max(r=>TextRenderer.MeasureText(r.ToString(),list.Font).Width)+12;
+                list.EndUpdate();var index=Array.FindIndex(matches,r=>r.Id==previous);
+                if(matches.Length>0)list.SelectedIndex=index>=0?index:0;
+                roomGroups.TabPages[i].Text=$"{groupNames[i]} ({matches.Length})";
+            }
+            Preview();
+        }
+        from.SelectedIndexChanged+=(_,_)=>Preview();roomGroups.SelectedIndexChanged+=(_,_)=>Preview();
+        foreach(var list in groupLists)list.SelectedIndexChanged+=(_,_)=>Preview();
+        search.TextChanged+=(_,_)=>FilterRooms();FilterRooms();
         dialog.Action("XÁC NHẬN CHUYỂN",async()=>
         {
-            if(from.SelectedItem is StayChoice a && to.SelectedItem is Room b)await Changed(()=>service.TransferAsync(a.Stay,b));
+            var selectedIndex=roomGroups.SelectedIndex;
+            if(from.SelectedItem is not StayChoice choice || selectedIndex<0 || selectedIndex>=groupLists.Length
+                || groupLists[selectedIndex].SelectedItem is not Room room)throw new BusinessException("Hãy chọn phòng mới.");
+            if(choice.Stay.Departure<=ServerNow)throw new BusinessException("Lượt ở đã quá hạn trả. Hãy gia hạn trước khi chuyển phòng.");
+            await Changed(()=>service.TransferAsync(choice.Stay,room));
         });dialog.ShowDialog(this);return Task.CompletedTask;
     });
     private async void btnGiaHan_Click(object? sender,EventArgs e)=>await Run(()=>
@@ -160,10 +231,62 @@ public partial class ucDashboard
     });
     private async void btnBaoTri_Click(object? sender,EventArgs e)=>await Run(()=>
     {
-        using var dialog=new InputDialog("Bảo trì phòng",530,270);var rooms=Ui.Combo(data.Rooms.Where(r=>r.Status is RoomStatus.Trong or RoomStatus.BaoTri));
-        if(rooms.Items.Count==0)throw new BusinessException("Không có phòng có thể đổi trạng thái bảo trì.");
-        dialog.Add("Chọn phòng trống hoặc đang bảo trì",rooms);
-        dialog.Action("BẬT / KẾT THÚC BẢO TRÌ",async()=> {if(rooms.SelectedItem is Room r)await Changed(()=>service.SetRoomStatusAsync(r,r.Status==RoomStatus.Trong?RoomStatus.BaoTri:RoomStatus.Trong));});
+        using var dialog=new InputDialog("Bảo trì phòng",680,Math.Min(650,Screen.FromControl(this).WorkingArea.Height-30));
+        var eligible=data.Rooms.Where(r=>r.Status is RoomStatus.Trong or RoomStatus.BaoTri).OrderBy(r=>r.Number).ToArray();
+        if(eligible.Length==0)throw new BusinessException("Không có phòng có thể đổi trạng thái bảo trì.");
+        var search=Ui.Text();search.PlaceholderText="Tìm theo số hoặc loại phòng...";
+        var tabs=new TabControl {Height=260,Font=AppTheme.Bold};
+        var lists=new ListBox[2];
+        var titles=new[]{"Phòng trống","Đang bảo trì"};
+        for(var i=0;i<lists.Length;i++)
+        {
+            var page=new TabPage(titles[i]);tabs.TabPages.Add(page);
+            var list=new ListBox {Dock=DockStyle.Fill,IntegralHeight=false,HorizontalScrollbar=true,Font=AppTheme.Body};
+            page.Controls.Add(list);lists[i]=list;
+        }
+        var details=new Label {Height=98,BackColor=AppTheme.Canvas,ForeColor=AppTheme.Ink,Padding=new Padding(14,10,10,8)};
+        dialog.Add("Tìm phòng",search);dialog.Add("Chọn phòng",tabs);dialog.Add("Thông tin và thao tác",details);
+        dialog.Note("Chỉ có thể bật bảo trì cho phòng trống không còn lịch đặt. Khi kết thúc bảo trì, phòng sẽ trở lại trạng thái trống.");
+        Button? action=null;
+        Room? SelectedRoom()
+        {
+            var index=tabs.SelectedIndex;
+            return index>=0 && index<lists.Length?lists[index].SelectedItem as Room:null;
+        }
+        void Preview()
+        {
+            var room=SelectedRoom();
+            if(room is null){details.Text="Không có phòng phù hợp trong mục này.";if(action is not null)action.Enabled=false;return;}
+            var reserved=data.Stays.Any(s=>s.RoomId==room.Id && s.Status==StayStatus.Reserved);
+            details.Text=$"P.{room.Number}  •  {room.Type}\nGiá: {room.Rate:N0} đ/ngày  •  Trạng thái: {Ui.Status(room.Status)}\n"+
+                (room.Status==RoomStatus.Trong?reserved?"Phòng còn lịch đặt; cần xử lý trước khi bảo trì.":"Có thể đưa phòng vào bảo trì.":"Có thể kết thúc bảo trì để phòng sẵn sàng đón khách.");
+            if(action is not null){action.Text=room.Status==RoomStatus.Trong?"BẮT ĐẦU BẢO TRÌ":"KẾT THÚC BẢO TRÌ";action.Enabled=room.Status==RoomStatus.BaoTri || !reserved;}
+        }
+        void FilterRooms()
+        {
+            var query=search.Text.Trim();
+            for(var i=0;i<lists.Length;i++)
+            {
+                var list=lists[i];var previous=(list.SelectedItem as Room)?.Id;
+                var status=i==0?RoomStatus.Trong:RoomStatus.BaoTri;
+                var matches=eligible.Where(r=>r.Status==status && (query.Length==0 || r.Number.Contains(query,StringComparison.CurrentCultureIgnoreCase)
+                    || r.Type.Contains(query,StringComparison.CurrentCultureIgnoreCase))).ToArray();
+                list.BeginUpdate();list.Items.Clear();list.Items.AddRange(matches.Cast<object>().ToArray());
+                list.HorizontalExtent=matches.Length==0?0:matches.Max(r=>TextRenderer.MeasureText(r.ToString(),list.Font).Width)+12;
+                list.EndUpdate();var index=Array.FindIndex(matches,r=>r.Id==previous);
+                if(matches.Length>0)list.SelectedIndex=index>=0?index:0;
+                tabs.TabPages[i].Text=$"{titles[i]} ({matches.Length})";
+            }
+            Preview();
+        }
+        tabs.SelectedIndexChanged+=(_,_)=>Preview();foreach(var list in lists)list.SelectedIndexChanged+=(_,_)=>Preview();
+        search.TextChanged+=(_,_)=>FilterRooms();
+        action=dialog.Action("BẮT ĐẦU BẢO TRÌ",async()=>
+        {
+            var room=SelectedRoom()??throw new BusinessException("Hãy chọn phòng.");
+            await Changed(()=>service.SetRoomStatusAsync(room,room.Status==RoomStatus.Trong?RoomStatus.BaoTri:RoomStatus.Trong));
+        });
+        FilterRooms();
         dialog.ShowDialog(this);return Task.CompletedTask;
     });
     private async void btnBaoDonXong_Click(object? sender,EventArgs e)=>await Run(async()=>
@@ -174,18 +297,56 @@ public partial class ucDashboard
     });
     private async void btnGoiDichVu_Click(object? sender,EventArgs e)=>await Run(()=>
     {
-        using var dialog=new InputDialog("Gọi dịch vụ",760,760);
+        using var dialog=new InputDialog("Gọi dịch vụ",900,Math.Min(760,Screen.FromControl(this).WorkingArea.Height-30)) {MaximizeBox=false};
         var stay=StayCombo();if(stay.Items.Count==0)throw new BusinessException("Không có phòng đang ở.");
-        var categories=Ui.Combo(new[]{"Tất cả"}.Concat(data.Menu.Select(s=>s.Category).Distinct()));var items=Ui.Combo(data.Menu);var quantity=Ui.Number(100);
-        categories.SelectedIndexChanged+=(_,_)=>items.DataSource=data.Menu.Where(s=>categories.SelectedIndex==0 || s.Category==(string?)categories.SelectedItem).ToList();
-        var cart=new List<(ServiceItem Item,int Quantity)>();var list=new ListBox {Height=170};var total=new Label {AutoSize=true};
+        var categories=Ui.Combo(new[]{"Tất cả"}.Concat(data.Menu.Select(s=>s.Category).Distinct()));
+        var search=Ui.Text();search.PlaceholderText="Tìm tên dịch vụ...";
+        var items=new ListBox {Dock=DockStyle.Fill,Font=AppTheme.Body,IntegralHeight=false,HorizontalScrollbar=true};
+        var selected=new Label {Dock=DockStyle.Fill,Font=AppTheme.Body,ForeColor=AppTheme.Ink,AutoEllipsis=false,Padding=new Padding(4,5,4,0)};
+        var quantity=Ui.Number(100);
+        void FilterServices()
+        {
+            var previous=(items.SelectedItem as ServiceItem)?.Id;
+            var query=search.Text.Trim();
+            var matches=data.Menu.Where(s=>(categories.SelectedIndex==0 || s.Category==(string?)categories.SelectedItem)
+                && (query.Length==0 || s.Name.Contains(query,StringComparison.CurrentCultureIgnoreCase))).ToArray();
+            items.BeginUpdate();items.Items.Clear();items.Items.AddRange(matches.Cast<object>().ToArray());
+            items.HorizontalExtent=matches.Length==0?0:matches.Max(s=>TextRenderer.MeasureText(s.ToString(),items.Font).Width)+12;
+            items.EndUpdate();
+            var index=Array.FindIndex(matches,s=>s.Id==previous);
+            if(matches.Length>0)items.SelectedIndex=index>=0?index:0;
+            selected.Text=items.SelectedItem is ServiceItem item?item.ToString():"Không tìm thấy dịch vụ phù hợp.";
+        }
+        categories.SelectedIndexChanged+=(_,_)=>FilterServices();search.TextChanged+=(_,_)=>FilterServices();
+        items.SelectedIndexChanged+=(_,_)=>selected.Text=items.SelectedItem is ServiceItem item?item.ToString():"Không tìm thấy dịch vụ phù hợp.";
+        var cart=new List<(ServiceItem Item,int Quantity)>();var list=new ListBox {Dock=DockStyle.Fill,Font=AppTheme.Body};var total=new Label {Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink,TextAlign=ContentAlignment.MiddleRight};
         void UpdateCart(){list.DataSource=null;list.DataSource=cart.Select(x=>$"{x.Item.Name} × {x.Quantity} = {x.Item.Price*x.Quantity:N0} đ").ToList();total.Text=$"Tạm tính: {cart.Sum(x=>x.Item.Price*x.Quantity):N0} đ";}
-        dialog.Add("Phòng nhận",stay);dialog.Add("Danh mục",categories);dialog.Add("Dịch vụ",items);dialog.Add("Số lượng",quantity);
-        var add=new Button {Text="+ Thêm vào danh sách",Height=34};
+        var layout=new TableLayoutPanel {Height=530,ColumnCount=2,RowCount=1,BackColor=Color.White};
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        var pick=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=12,Padding=new Padding(4,0,18,0)};
+        pick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        foreach(var height in new[]{34,24,36,24,36,24,34,130,63,24,36,48})pick.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
+        void Field(string caption,Control control,int labelRow)
+        {
+            pick.Controls.Add(new Label {Text=caption,Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Muted},0,labelRow);
+            control.Dock=DockStyle.Fill;pick.Controls.Add(control,0,labelRow+1);
+        }
+        pick.Controls.Add(new Label {Text="CHỌN DỊCH VỤ",Dock=DockStyle.Fill,Font=AppTheme.Title,ForeColor=AppTheme.Ink},0,0);
+        Field("Phòng nhận",stay,1);Field("Danh mục",categories,3);Field("Tìm dịch vụ",search,5);
+        pick.Controls.Add(items,0,7);pick.Controls.Add(selected,0,8);Field("Số lượng",quantity,9);
+        var add=new Button {Text="+ THÊM VÀO YÊU CẦU",Dock=DockStyle.Fill};AppTheme.Button(add,true);
         add.Click+=(_,_)=> {if(items.SelectedItem is ServiceItem item && cart.Count<100){cart.Add((item,(int)quantity.Value));UpdateCart();}};
-        dialog.Add("",add);dialog.Add("Danh sách yêu cầu",list);
-        var remove=new Button {Text="Xóa dòng đã chọn",Height=32};remove.Click+=(_,_)=> {if(list.SelectedIndex>=0){cart.RemoveAt(list.SelectedIndex);UpdateCart();}};
-        dialog.Add("",remove);dialog.Add("",total);UpdateCart();
+        pick.Controls.Add(add,0,11);layout.Controls.Add(pick,0,0);
+        var order=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(18,0,4,0),BackColor=Color.FromArgb(246,249,255)};
+        order.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        order.RowStyles.Add(new RowStyle(SizeType.Absolute,42));order.RowStyles.Add(new RowStyle(SizeType.Percent,100));order.RowStyles.Add(new RowStyle(SizeType.Absolute,45));order.RowStyles.Add(new RowStyle(SizeType.Absolute,44));
+        order.Controls.Add(new Label {Text="DANH SÁCH YÊU CẦU",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink,TextAlign=ContentAlignment.MiddleLeft},0,0);
+        order.Controls.Add(list,0,1);
+        var remove=new Button {Text="XÓA DÒNG ĐÃ CHỌN",Dock=DockStyle.Fill};AppTheme.Button(remove);
+        remove.Click+=(_,_)=> {if(list.SelectedIndex>=0){cart.RemoveAt(list.SelectedIndex);UpdateCart();}};
+        order.Controls.Add(remove,0,2);order.Controls.Add(total,0,3);layout.Controls.Add(order,1,0);
+        dialog.Add("",layout);FilterServices();UpdateCart();
         dialog.Action("GỬI YÊU CẦU",async()=> {if(stay.SelectedItem is StayChoice item)await Changed(()=>service.AddServicesAsync(item.Stay,cart.Select(x=>new OrderInput(x.Item.Id,x.Quantity)).ToArray()));});
         dialog.ShowDialog(this);return Task.CompletedTask;
     });

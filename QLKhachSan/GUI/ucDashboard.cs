@@ -18,6 +18,9 @@ public partial class ucDashboard : UserControl
     private bool loaded;
     private DateTime lastDate=DateTime.Today;
     private RevenueOverview? revenueOverview;
+    private List<TodayScheduleItem> todaySchedule=[];
+    private readonly Dictionary<string,(TabPage Tab,DataGridView Grid,Label Empty)> scheduleSections=[];
+    private readonly Label scheduleHeading=new(),scheduleSummary=new();
     private PeriodReport? accountingToday;
     private readonly System.Diagnostics.Stopwatch serverElapsed = new();
     private DateTime ServerNow => data.ServerNow==default ? DateTime.Now : data.ServerNow+serverElapsed.Elapsed;
@@ -82,6 +85,7 @@ public partial class ucDashboard : UserControl
             AddTool("Bảng giá",960,ShowPricing);
         }
         dgvDatCoc.AutoGenerateColumns=true;dgvLichTrinh.AutoGenerateColumns=true;
+        ConfigureScheduleView();
         ApplyAppearance();
         ConfigureRoleDashboard();
         ReflowSidebar();
@@ -106,9 +110,10 @@ public partial class ucDashboard : UserControl
     private async Task Reload()
     {
         var fresh=await service.DashboardAsync(revenueOverview?.Days??7);
+        var schedule=RolePolicy.CanViewOperations(user.Role)?await service.TodayScheduleAsync(fresh.ServerNow.Date):[];
         accountingToday=user.Role=="Accountant" ? await service.PeriodReportAsync(fresh.ServerNow.Date,fresh.ServerNow.Date) : null;
         if(IsDisposed)return;
-        data=fresh;serverElapsed.Restart();lastDate=fresh.ServerNow.Date;
+        data=fresh;todaySchedule=schedule;serverElapsed.Restart();lastDate=fresh.ServerNow.Date;
         lblHeaderTitle.Text=$"{DashboardTitle()} • {user.Username}";
         Render();
     }
@@ -172,6 +177,24 @@ public partial class ucDashboard : UserControl
     }
     private sealed record BookingRow(long Id,string Phòng,string Khách,string SĐT,string CCCD,DateTime NgàyĐến,DateTime? HạnGiữ,decimal Cọc,string TìnhTrạng);
     private sealed record ScheduleRow(long Id,string Phòng,string Khách,string SĐT,string NghiệpVụ,DateTime ThờiGian);
+    private void ConfigureScheduleView()
+    {
+        dgvLichTrinh.Visible=false;cboBoLocLich.Visible=false;lblLichTitle.Visible=false;
+        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,BackColor=AppTheme.Canvas,Padding=new Padding(10)};
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,70));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));tabLichTrinh.Controls.Add(layout);layout.BringToFront();
+        var header=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(14,8,10,4)};
+        scheduleHeading.Dock=DockStyle.Top;scheduleHeading.Height=30;scheduleHeading.Font=AppTheme.Bold;scheduleHeading.ForeColor=AppTheme.Ink;header.Controls.Add(scheduleHeading);
+        scheduleSummary.Dock=DockStyle.Bottom;scheduleSummary.Height=22;scheduleSummary.ForeColor=AppTheme.Muted;header.Controls.Add(scheduleSummary);layout.Controls.Add(header,0,0);
+        var tabs=new TabControl {Dock=DockStyle.Fill,Font=AppTheme.Bold};layout.Controls.Add(tabs,0,1);
+        foreach(var stage in new[]{"Chờ nhận","Đã nhận","Chờ trả","Đã trả"})
+        {
+            var page=new TabPage(stage) {BackColor=Color.White,Padding=new Padding(8)};
+            var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;page.Controls.Add(grid);
+            var empty=new Label {Dock=DockStyle.Fill,BackColor=Color.White,TextAlign=ContentAlignment.MiddleCenter,Font=AppTheme.Body,ForeColor=AppTheme.Muted};
+            page.Controls.Add(empty);empty.BringToFront();tabs.TabPages.Add(page);scheduleSections[stage]=(page,grid,empty);
+            if(stage is "Chờ nhận" or "Chờ trả")grid.CellContentClick+=async (_,e)=>await HandleScheduleAction(grid,e);
+        }
+    }
     private void RenderBookings()
     {
         dgvDatCoc.DataSource=data.Stays.Where(s=>s.Status==StayStatus.Reserved).OrderBy(s=>s.Arrival).Select(s=>new BookingRow(s.Id,StayRoom(s)?.Number??"?",s.Guest,s.Phone,s.Identity,s.Arrival,s.HoldUntil,s.Deposit,s.HoldUntil<=ServerNow?"QUÁ HẠN — KHÔNG HOÀN CỌC":"Chờ nhận")).ToList();
@@ -189,15 +212,40 @@ public partial class ucDashboard : UserControl
     }
     private void RenderSchedule()
     {
-        var filter=cboBoLocLich.SelectedIndex;
-        dgvLichTrinh.DataSource=data.Stays.Where(s=>(s.Status==StayStatus.Reserved?s.Arrival:s.Departure).Date==ServerNow.Date)
-            .Where(s=>filter<=0 || (filter==1?s.Status==StayStatus.Reserved:s.Status==StayStatus.Occupied))
-            .Select(s=>new ScheduleRow(s.Id,StayRoom(s)?.Number??"?",s.Guest,s.Phone,s.Status==StayStatus.Reserved?"Chờ Check-in":"Chờ Check-out",s.Status==StayStatus.Reserved?s.Arrival:s.Departure)).OrderBy(x=>x.ThờiGian).ToList();
-        if(dgvLichTrinh.Columns["Id"] is { } idColumn)idColumn.Visible=false;
-        if(RolePolicy.CanOperate(user.Role))AddAction(dgvLichTrinh,"action","Tiến hành");
-        dgvLichTrinh.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.AllCells;
-        if(dgvLichTrinh.Columns["NghiệpVụ"] is { } task)task.HeaderText="Nghiệp vụ";
-        if(dgvLichTrinh.Columns["ThờiGian"] is { } when){when.HeaderText="Thời gian";when.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
+        if(scheduleSections.Count==0)return;
+        scheduleHeading.Text=$"LỊCH NHẬN / TRẢ HÔM NAY  •  {ServerNow:dd/MM/yyyy}";
+        scheduleSummary.Text=string.Join("   •   ",new[]{"Chờ nhận","Đã nhận","Chờ trả","Đã trả"}.Select(stage=>$"{stage}: {todaySchedule.Count(x=>x.Stage==stage)}"));
+        foreach(var (stage,section) in scheduleSections)
+        {
+            var rows=todaySchedule.Where(x=>x.Stage==stage).OrderBy(x=>x.Time)
+                .Select(x=>new ScheduleRow(x.StayId,x.Room,x.Guest,x.Phone,x.Stage,x.Time)).ToList();
+            var grid=section.Grid;grid.DataSource=rows;
+            if(grid.Columns["Id"] is { } id)id.Visible=false;
+            if(grid.Columns["NghiệpVụ"] is { } task)task.Visible=false;
+            if(grid.Columns["ThờiGian"] is { } time){time.HeaderText="Thời gian";time.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
+            if(RolePolicy.CanOperate(user.Role) && stage is "Chờ nhận" or "Chờ trả")
+            {
+                AddAction(grid,"action",stage=="Chờ nhận"?"Nhận phòng":"Trả phòng");
+                if(grid.Columns["action"] is { } action){action.AutoSizeMode=DataGridViewAutoSizeColumnMode.None;action.Width=130;}
+            }
+            section.Tab.Text=$"{stage} ({rows.Count})";
+            section.Empty.Text=$"Hôm nay không có lượt {stage.ToLowerInvariant()}.";
+            section.Empty.Visible=rows.Count==0;
+        }
+    }
+    private async Task HandleScheduleAction(DataGridView grid,DataGridViewCellEventArgs e)
+    {
+        if(!RolePolicy.CanOperate(user.Role) || e.RowIndex<0 || e.ColumnIndex<0 || grid.Columns[e.ColumnIndex].Name!="action"
+            || grid.Rows[e.RowIndex].DataBoundItem is not ScheduleRow row)return;
+        var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id);if(stay is null)return;
+        await Run(async()=>
+        {
+            if(stay.Status==StayStatus.Reserved)
+            {
+                if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))await Changed(()=>service.CheckInAsync(stay));
+            }
+            else if(stay.Status==StayStatus.Occupied)await ShowCheckout(stay);
+        });
     }
     private void RenderHousekeeping()
     {
@@ -245,6 +293,7 @@ public partial class ucDashboard : UserControl
         {
             revenueOverview=new RevenueOverview {Dock=DockStyle.Fill};
             revenueOverview.PeriodChanged+=async (_,_)=>await Run(Reload);
+            revenueOverview.DetailsRequested+=async (_,_)=>await Run(ShowInvoices);
             pnlChartContainer.Controls.Add(revenueOverview);
         }
         revenueOverview.SetData(data);

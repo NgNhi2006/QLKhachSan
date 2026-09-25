@@ -25,6 +25,7 @@ public sealed record ServiceLine(long Id, long StayId, string Category, string N
     public decimal Total => Cancelled is null ? Quantity * Price : 0;
 }
 public sealed record OrderInput(int ServiceId, int Quantity);
+public sealed record TodayScheduleItem(long StayId,string Room,string Guest,string Phone,string Stage,DateTime Time);
 public sealed record Invoice(long Id, long StayId, string Room, string Guest, DateTime Issued,
     decimal RoomCharge, decimal ServiceCharge, decimal Deposit, decimal Collected, decimal Refunded, string Method)
 {

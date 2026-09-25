@@ -4,22 +4,22 @@ namespace QLKhachSan.GUI;
 
 internal static class PaymentQr
 {
-    public static void Add(InputDialog dialog, ComboBox method, Func<decimal> amount, Func<string> reference, NumericUpDown? amountInput=null, TextBox? referenceInput=null, ComboBox? referenceChoice=null)
+    public static void Add(InputDialog dialog, ComboBox method, Func<decimal> amount, Func<string> reference, NumericUpDown? amountInput=null, TextBox? referenceInput=null, ComboBox? referenceChoice=null, Action<bool>? visibilityChanged=null)
     {
         var settings=AppSettings.Load();
         var configured=!string.IsNullOrWhiteSpace(settings.BankCode)
             && !string.IsNullOrWhiteSpace(settings.BankAccount)
             && !string.IsNullOrWhiteSpace(settings.BankAccountName);
-        var panel=new TableLayoutPanel {Height=configured?240:68,Dock=DockStyle.Top,ColumnCount=1,RowCount=configured?2:1,Margin=Padding.Empty};
+        var panel=new TableLayoutPanel {Height=configured?390:68,Dock=DockStyle.Top,ColumnCount=1,RowCount=configured?2:1,Margin=new Padding(0,0,0,16),BackColor=Color.FromArgb(246,249,255)};
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute,configured?62:60));
-        if(configured)panel.RowStyles.Add(new RowStyle(SizeType.Absolute,174));
-        var info=new Label {Dock=DockStyle.Fill,AutoEllipsis=true,TextAlign=ContentAlignment.TopLeft};
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute,configured?76:60));
+        if(configured)panel.RowStyles.Add(new RowStyle(SizeType.Absolute,300));
+        var info=new Label {Dock=DockStyle.Fill,AutoEllipsis=true,TextAlign=ContentAlignment.TopLeft,Padding=new Padding(12,10,12,0)};
         panel.Controls.Add(info,0,0);
         PictureBox? picture=null;
         if(configured)
         {
-            picture=new PictureBox {Dock=DockStyle.Fill,Margin=new Padding(0,0,0,0),SizeMode=PictureBoxSizeMode.Zoom};
+            picture=new PictureBox {Dock=DockStyle.Fill,Margin=new Padding(12,0,12,10),SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.White};
             panel.Controls.Add(picture,0,1);
             picture.LoadCompleted+=(_,e)=>{if(e.Error is not null && !dialog.IsDisposed)info.Text+="\nKhông tải được QR; dùng thông tin tài khoản bên trên.";};
         }
@@ -38,8 +38,12 @@ internal static class PaymentQr
         {
             var transfer=(string?)method.SelectedItem=="Chuyển khoản";
             var show=transfer && amount()>0;
+            panel.Height=transfer?(configured?390:68):0;
+            panel.Margin=transfer?new Padding(0,0,0,16):Padding.Empty;
             panel.Visible=transfer;
             if(caption is not null)caption.Visible=transfer;
+            visibilityChanged?.Invoke(transfer);
+            if(transfer)dialog.ScrollTo((Control?)picture ?? panel);
             if(!configured)
                 info.Text=transfer?"Chưa cấu hình BankCode, BankAccount và BankAccountName trong appsettings.json.":"Chọn Chuyển khoản để hiển thị QR ngân hàng.";
             else
