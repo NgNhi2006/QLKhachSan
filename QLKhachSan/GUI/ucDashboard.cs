@@ -51,8 +51,8 @@ public partial class ucDashboard : UserControl
         cboBoLocLich.SelectedIndex=0;
         lblHeaderTitle.Text=$"QUẢN LÝ KHÁCH SẠN • {user.Username} ({RolePolicy.Name(user.Role)})";
         lblCard5Title.Text="DOANH THU HÔM NAY";lblCard5Sub.Text="Hóa đơn + cọc không hoàn";
-        tabMatrix.Text="SƠ ĐỒ PHÒNG";lblLichTitle.Text="LỊCH ĐẾN / ĐI HÔM NAY";
-        tabThongKe.Text="DOANH THU";tabLichTrinh.Text="LỊCH ĐẾN / ĐI";
+        tabMatrix.Text="Sơ đồ phòng";lblLichTitle.Text="LỊCH ĐẾN / ĐI HÔM NAY";
+        tabThongKe.Text="Doanh thu";tabLichTrinh.Text="Lịch đến / đi";
         lblCard4Sub.Text="Dự kiến trả trong ngày";btnDatLichPhong.Text="Đặt trước / Giữ chỗ";
         btnBaoTri.Visible=RolePolicy.CanMaintainRooms(user.Role);
         var operatorAccess=RolePolicy.CanOperate(user.Role);

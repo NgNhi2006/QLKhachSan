@@ -6,11 +6,11 @@ public partial class ucDashboard
 {
     private string DashboardTitle() => user.Role switch
     {
-        "Admin" => "DASHBOARD QUẢN TRỊ",
-        "Manager" => "DASHBOARD QUẢN LÝ",
-        "Reception" => "DASHBOARD LỄ TÂN",
-        "Accountant" => "DASHBOARD KẾ TOÁN",
-        _ => "DASHBOARD"
+        "Admin" => "Tổng quan quản trị",
+        "Manager" => "Tổng quan quản lý",
+        "Reception" => "Bàn lễ tân",
+        "Accountant" => "Tổng quan kế toán",
+        _ => "Tổng quan"
     };
 
     private void ConfigureRoleDashboard()
@@ -35,7 +35,7 @@ public partial class ucDashboard
             lblCard3Sub.Text="Cọc và thanh toán";
             lblCard4Sub.Text="Hoàn cho khách";
             lblCard5Title.Text="DOANH THU HÔM NAY";
-            tabThongKe.Text="THỐNG KÊ DOANH THU";
+            tabThongKe.Text="Doanh thu";
             txtTimPhong.Visible=false;btnTimPhong.Visible=false;
             tlpBody.ColumnStyles[2].Width=0;
             AddTool("Báo cáo tài chính",600,ShowInvoices);
@@ -48,7 +48,7 @@ public partial class ucDashboard
             lblCard2Title.Text="PHÒNG SẴN SÀNG";
             lblCard3Title.Text="LỊCH ĐẶT SẮP ĐẾN";
             lblCard4Title.Text="KHÁCH SẮP TRẢ";
-            tabThongKe.Text="DOANH THU VÀ THỐNG KÊ";
+            tabThongKe.Text="Doanh thu";
         }
         else if(user.Role=="Reception")
         {
@@ -58,13 +58,13 @@ public partial class ucDashboard
             lblCard2Title.Text="PHÒNG TRỐNG";
             lblCard3Title.Text="CHỜ NHẬN PHÒNG";
             lblCard4Title.Text="CHỜ TRẢ PHÒNG";
-            tabMatrix.Text="TÌNH TRẠNG PHÒNG";
-            tabLichTrinh.Text="LỊCH NHẬN / TRẢ";
+            tabMatrix.Text="Tình trạng phòng";
+            tabLichTrinh.Text="Lịch nhận / trả";
         }
         else
         {
             lblCard1Title.Text="CÔNG SUẤT PHÒNG";
-            tabThongKe.Text="TOÀN BỘ DOANH THU";
+            tabThongKe.Text="Doanh thu";
         }
     }
 }

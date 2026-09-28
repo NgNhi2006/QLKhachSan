@@ -28,19 +28,19 @@ internal sealed class RevenueOverview : UserControl
         period.SelectedIndexChanged+=(_,_)=>PeriodChanged?.Invoke(this,EventArgs.Empty);
         var metrics=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,Margin=new Padding(0,0,0,14)};
         for(var i=0;i<4;i++)metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
-        metrics.Controls.Add(Metric("TỔNG TRONG KỲ",total),0,0);metrics.Controls.Add(Metric("HÔM NAY",today),1,0);
-        metrics.Controls.Add(Metric("TRUNG BÌNH / NGÀY",average),2,0);metrics.Controls.Add(Metric("NGÀY CAO NHẤT",best),3,0);
+        metrics.Controls.Add(Metric("TỔNG TRONG KỲ",total,AppTheme.Blue),0,0);metrics.Controls.Add(Metric("HÔM NAY",today,AppTheme.Teal),1,0);
+        metrics.Controls.Add(Metric("TRUNG BÌNH / NGÀY",average,Color.FromArgb(62,118,169)),2,0);metrics.Controls.Add(Metric("NGÀY CAO NHẤT",best,AppTheme.Amber),3,0);
         var plots=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,Margin=Padding.Empty};
         plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,66));plots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,34));
         trend.Dock=DockStyle.Fill;categories.Dock=DockStyle.Fill;trend.Margin=new Padding(0,0,8,0);categories.Margin=new Padding(8,0,0,0);
         plots.Controls.Add(trend,0,0);plots.Controls.Add(categories,1,0);
         layout.Controls.Add(header,0,0);layout.Controls.Add(metrics,0,1);layout.Controls.Add(plots,0,2);Controls.Add(layout);
     }
-    private static Panel Metric(string title,Label value)
+    private static Panel Metric(string title,Label value,Color accent)
     {
-        var panel=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Margin=new Padding(0,0,12,0)};
+        var panel=new DashboardMetricCard {Dock=DockStyle.Fill,Accent=accent,Margin=new Padding(0,0,12,0)};
         panel.Controls.Add(new Label {Text=title,Font=AppTheme.Small,ForeColor=AppTheme.Muted,AutoSize=true,Location=new Point(14,12)});
-        value.Font=AppTheme.Title;value.ForeColor=AppTheme.Ink;value.Location=new Point(12,35);value.Height=36;value.AutoEllipsis=true;
+        value.Font=AppTheme.Title;value.ForeColor=accent;value.Location=new Point(12,35);value.Height=36;value.AutoEllipsis=true;
         panel.Resize+=(_,_)=>value.Width=Math.Max(20,panel.Width-24);panel.Controls.Add(value);return panel;
     }
     public void SetData(DashboardData data)
@@ -91,6 +91,7 @@ internal sealed class RevenuePlot : Control
     {
         base.OnPaint(e);hits.Clear();if(Width<160||Height<140)return;
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        using(var border=new Pen(AppTheme.Border))e.Graphics.DrawRectangle(border,0,0,Width-1,Height-1);
         DrawLabel(e.Graphics,breakdown?Caption:"Doanh thu theo ngày",AppTheme.Bold,AppTheme.Ink,new Rectangle(18,16,Width-36,26));
         if(breakdown)DrawCategories(e.Graphics);else DrawColumns(e.Graphics);
     }

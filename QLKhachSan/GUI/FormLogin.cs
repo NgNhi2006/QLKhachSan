@@ -1,6 +1,7 @@
 using QLKhachSan.BLL;
 using QLKhachSan.DAL;
 using QLKhachSan.DTO;
+using System.Runtime.InteropServices;
 
 namespace QLKhachSan.GUI;
 
@@ -14,23 +15,29 @@ public partial class FormLogin : Form
     private readonly ComboBox accountPicker=new() {DropDownStyle=ComboBoxStyle.DropDown,MaxLength=50};
     private readonly CheckBox rememberPassword=new()
     {
-        Text="Lưu mật khẩu trên máy này",AutoSize=true,Location=new Point(545,298),
-        Font=new Font("Segoe UI",9),ForeColor=Color.FromArgb(71,85,105)
+        Text="Ghi nhớ mật khẩu",AutoSize=true,Location=new Point(323,437),
+        Font=new Font("Segoe UI",9),ForeColor=Color.FromArgb(89,107,127)
     };
     public UserSession? Session { get; private set; }
     public FormLogin()
     {
         InitializeComponent(); AcceptButton=btnDangNhap;
-        pnlBanner.BackColor=AppTheme.Navy;lblHotelTitle.Text="HOTEL DESK";lblHotelTitle.Font=AppTheme.Title;
-        pnlBanner.Controls.Add(new PictureBox {Image=UiIcons.Create("bed",Color.FromArgb(234,179,75),64),SizeMode=PictureBoxSizeMode.Zoom,Location=new Point(41,77),Size=new Size(78,78)});
-        lblHotelSub.Text="Quản lý lưu trú\nVận hành rõ ràng, phục vụ chu đáo.";
-        lblTitleLogin.ForeColor=AppTheme.Ink;AppTheme.Button(btnDangNhap,true);
-        txtTenDangNhap.Visible=false;txtTenDangNhap.TabStop=false;txtMatKhau.MaxLength=128;
-        accountPicker.Bounds=txtTenDangNhap.Bounds;accountPicker.Font=txtTenDangNhap.Font;
+        accountPicker.Bounds=new Rectangle(52,9,357,32);
+        accountPicker.Font=new Font("Segoe UI",10.5f);
+        accountPicker.FlatStyle=FlatStyle.Flat;
+        accountPicker.BackColor=Color.White;
         accountPicker.TabIndex=0;accountPicker.AutoCompleteMode=AutoCompleteMode.SuggestAppend;
         accountPicker.AutoCompleteSource=AutoCompleteSource.ListItems;
-        Controls.Add(accountPicker);accountPicker.BringToFront();
-        Controls.Add(rememberPassword);
+        pnlAccountField.Controls.Add(accountPicker);
+        pnlAccountField.TrackFocus(accountPicker);
+        rememberPassword.TabIndex=3;
+        pnlForm.Controls.Add(rememberPassword);
+        pnlBanner.MouseDown+=BeginWindowDrag;
+        foreach(Control control in pnlBanner.Controls)
+            if(control is Label)control.MouseDown+=BeginWindowDrag;
+        pnlForm.MouseDown+=BeginWindowDrag;
+        lblTitleLogin.MouseDown+=BeginWindowDrag;
+        lblSubtitle.MouseDown+=BeginWindowDrag;
         var accounts=RememberedLogin.Load();
         accountPicker.Items.AddRange(accounts.Select(x=>(object)x.Username).ToArray());
         if(accounts.Count>0)
@@ -51,6 +58,23 @@ public partial class FormLogin : Form
         Shown+=async (_,_)=>await InitializeAsync();
         FormClosing+=(_,e)=> { if(busy)e.Cancel=true; };
     }
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd,int msg,IntPtr wParam,IntPtr lParam);
+    private void BeginWindowDrag(object? sender,MouseEventArgs e)
+    {
+        if(e.Button!=MouseButtons.Left)return;
+        ReleaseCapture();
+        SendMessage(Handle,0xA1,(IntPtr)2,IntPtr.Zero);
+    }
+    private void SetWorking(bool working,string message="")
+    {
+        busy=working;
+        btnDangNhap.Enabled=!working;
+        progressLogin.Visible=working;
+        lblStatus.Text=message;
+        lblStatus.Visible=working || !string.IsNullOrEmpty(message);
+        UseWaitCursor=working;
+    }
     private void SyncAccount()
     {
         if(syncingAccount)return;
@@ -65,19 +89,19 @@ public partial class FormLogin : Form
     }
     private async Task InitializeAsync()
     {
-        btnDangNhap.Enabled=false; busy=true;
+        SetWorking(true,"Đang kiểm tra kết nối...");
         try
         {
             await SchemaMigrator.EnsureAsync();
             setup=await auth.NeedsSetupAsync();
             txtMatKhau.MaxLength=setup?5:128;
             initialized=true;
-            lblSubtitle.Text=setup?"Tạo quản trị đầu tiên (mật khẩu 1–5 ký tự)":"Vui lòng nhập thông tin để đăng nhập";
-            lblSubtitle.MaximumSize=new Size(370,0);lblSubtitle.AutoSize=true;
-            btnDangNhap.Text=setup?"TẠO QUẢN TRỊ":"ĐĂNG NHẬP";
+            lblTitleLogin.Text=setup?"Thiết lập quản trị":"Đăng nhập";
+            lblSubtitle.Text=setup?"Tạo tài khoản quản trị đầu tiên. Mật khẩu gồm 1–5 ký tự.":"Nhập thông tin để tiếp tục công việc của bạn.";
+            btnDangNhap.Text=setup?"TẠO QUẢN TRỊ  →":"ĐĂNG NHẬP  →";
         }
-        catch(Exception ex){Ui.Error(this,ex);btnDangNhap.Text="THỬ LẠI KẾT NỐI";}
-        finally{busy=false;btnDangNhap.Enabled=true;}
+        catch(Exception ex){Ui.Error(this,ex);btnDangNhap.Text="THỬ LẠI KẾT NỐI  →";}
+        finally{SetWorking(false);}
     }
     private void lblClose_Click(object? sender,EventArgs e){if(!busy)Close();}
     private void chkHienMatKhau_CheckedChanged(object? sender,EventArgs e)=>txtMatKhau.UseSystemPasswordChar=!chkHienMatKhau.Checked;
@@ -92,7 +116,7 @@ public partial class FormLogin : Form
             confirm.Action("XÁC NHẬN",()=> {if(password.Text!=txtMatKhau.Text)throw new BusinessException("Hai mật khẩu không khớp.");return Task.CompletedTask;});
             if(confirm.ShowDialog(this)!=DialogResult.OK)return;
         }
-        busy=true;btnDangNhap.Enabled=false;
+        SetWorking(true,setup?"Đang tạo tài khoản quản trị...":"Đang xác thực tài khoản...");
         try
         {
             Session=setup?await auth.SetupAsync(accountPicker.Text,txtMatKhau.Text):await auth.LoginAsync(accountPicker.Text,txtMatKhau.Text);
@@ -102,9 +126,9 @@ public partial class FormLogin : Form
             }
             catch(Exception ex)when(ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
             {MessageBox.Show(this,"Đăng nhập thành công nhưng không lưu được mật khẩu trên máy này.","Lưu mật khẩu");}
-            busy=false;DialogResult=DialogResult.OK;Close();
+            SetWorking(false);DialogResult=DialogResult.OK;Close();
         }
         catch(Exception ex){Ui.Error(this,ex);txtMatKhau.Clear();txtMatKhau.Focus();}
-        finally{busy=false;btnDangNhap.Enabled=true;}
+        finally{if(!IsDisposed)SetWorking(false);}
     }
 }

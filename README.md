@@ -2,6 +2,12 @@
 
 Ứng dụng WinForms .NET 10, SQL Server Express, phân tầng GUI / BLL / DAL / DTO.
 
+## Đọc tài liệu
+
+**[Thông tin](docs/THONG_TIN.md)** — giải thích toàn bộ chức năng, nút bấm, mã nguồn và database.
+
+Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **nút → hàm → tệp/dòng → bảng SQL**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
+
 ## Chạy ứng dụng
 
 - Mở `QLKhachSan.slnx`, chọn `QLKhachSan` làm startup project và F5; hoặc `dotnet run --project QLKhachSan`.
@@ -42,7 +48,7 @@ Vai trò đăng nhập: **Admin** (vận hành, báo cáo, tài khoản), **Rece
 - **Lịch đặt / Lịch sử**: xem lượt hoạt động theo khoảng ngày hoặc tra cứu 500 lượt gần nhất theo tên/SĐT/giấy tờ, gồm lượt hủy. Xuất CSV UTF-8.
 - **Thu cọc bổ sung**: chọn lượt, số tiền, phương thức và xác nhận thực thu.
 - **Xử lý dịch vụ**: sửa số lượng có lý do, hủy dòng chưa giao, giao từng phần. Sau khi giao một phần chỉ được giảm xuống ít nhất số đã giao. Dòng hủy còn trong lịch sử, không tính tiền. Không sửa dịch vụ của lượt đã thanh toán.
-- Danh mục phòng và dịch vụ hiện được lưu trong database để phục vụ đặt phòng, gọi dịch vụ và tính tiền; giao diện quản lý danh mục đã được gỡ khỏi dashboard. Bảo trì phòng chỉ khi đã xử lý hết lịch đặt.
+- Danh mục phòng và dịch vụ được lưu trong database để phục vụ đặt phòng, gọi dịch vụ và tính tiền. Admin và Manager có các mục **Danh mục phòng**, **Danh mục dịch vụ**, **Bảng giá** trên dashboard. Bảo trì phòng chỉ khi đã xử lý hết lịch đặt.
 - **Tài khoản & Nhân viên** (Admin): tạo tài khoản, đổi quyền, khóa/mở và đặt lại mật khẩu trên cùng một màn hình. Không sửa quyền hoặc khóa tài khoản đang sử dụng.
 - Đổi mật khẩu, đặt lại mật khẩu, đổi quyền hoặc khóa tài khoản làm mất hiệu lực phiên cũ. Phiên tự đổi mật khẩu được cập nhật sau khi giao dịch thành công.
 - **Nhật ký thao tác** (Admin): xem tối đa 1.000 thao tác gần nhất theo ngày.

@@ -77,7 +77,14 @@ internal sealed class InputDialog : Form
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         Controls.Add(fields);
         Controls.Add(actions);
-        var heading=new Panel {Dock=DockStyle.Top,Height=74,BackColor=AppTheme.Canvas};
+        var heading=new Panel {Dock=DockStyle.Top,Height=74,BackColor=Color.White};
+        heading.Paint+=(_,e)=>
+        {
+            using var accent=new SolidBrush(AppTheme.Teal);
+            using var edge=new Pen(AppTheme.Border);
+            e.Graphics.FillRectangle(accent,0,0,4,heading.Height);
+            e.Graphics.DrawLine(edge,0,heading.Height-1,heading.Width,heading.Height-1);
+        };
         heading.Controls.Add(new Label {Text=title,Font=AppTheme.Title,ForeColor=AppTheme.Ink,AutoEllipsis=true,Dock=DockStyle.Fill,Padding=new Padding(22,18,12,0)});
         Controls.Add(heading);
         FormClosing+=(_,e)=> { if(saving)e.Cancel=true; };

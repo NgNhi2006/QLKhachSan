@@ -7,63 +7,95 @@ public partial class ucDashboard
     private readonly Label lblDonSummary=new();
     private readonly Label lblDoiSummary=new();
     private readonly Label lblVipSummary=new();
-    private readonly HashSet<Button> paintedSidebarButtons=[];
     private void ApplyAppearance()
     {
         SuspendLayout();Font=AppTheme.Body;BackColor=AppTheme.Canvas;
-        pnlHeader.Height=78;pnlHeader.BackColor=Color.White;
-        lblHeaderTitle.Font=AppTheme.Title;lblHeaderTitle.ForeColor=AppTheme.Ink;lblHeaderTitle.Location=new Point(22,12);
-        var subtitle=new Label {Text="Không gian làm việc theo vai trò",Font=AppTheme.Small,ForeColor=AppTheme.Muted,AutoSize=true,Location=new Point(24,48)};
-        pnlHeader.Controls.Add(subtitle);lblClock.ForeColor=AppTheme.Muted;lblClock.Font=AppTheme.Small;
-        flpHeaderRight.Padding=new Padding(0,20,18,0);
-        btnRefresh.Text="Làm mới";btnDangXuat.Text="Đăng xuất";AppTheme.Button(btnRefresh);AppTheme.Button(btnDangXuat);
-        btnRefresh.Width=128;btnDangXuat.Width=142;
-        DecorateButton(btnRefresh,"refresh",AppTheme.Ink,12);
-        DecorateButton(btnDangXuat,"logout",Color.FromArgb(180,65,73),12);
-        btnDangXuat.ForeColor=Color.FromArgb(180,65,73);
-        tlpCards.Height=116;tlpCards.Padding=new Padding(16,10,16,8);
+        pnlHeader.Height=88;pnlHeader.BackColor=Color.White;
+        pnlHeader.Controls.Add(new DashboardLogo {Location=new Point(22,22)});
+        pnlHeader.Paint+=(_,e)=>{using var edge=new Pen(AppTheme.Border);e.Graphics.DrawLine(edge,0,pnlHeader.Height-1,pnlHeader.Width,pnlHeader.Height-1);};
+        lblHeaderTitle.Font=AppTheme.Title;lblHeaderTitle.ForeColor=AppTheme.Ink;
+        lblHeaderTitle.AutoSize=false;lblHeaderTitle.AutoEllipsis=true;lblHeaderTitle.Location=new Point(78,17);lblHeaderTitle.Height=31;
+        var subtitle=new Label {Text="Không gian làm việc của bạn",Font=AppTheme.Small,ForeColor=AppTheme.Muted,AutoSize=false,Location=new Point(80,51),Height=23};
+        pnlHeader.Controls.Add(subtitle);
+        void SizeHeaderText(){var width=Math.Max(230,pnlHeader.ClientSize.Width-flpHeaderRight.Width-104);lblHeaderTitle.Width=width;subtitle.Width=width;}
+        pnlHeader.Resize+=(_,_)=>SizeHeaderText();SizeHeaderText();
+        lblClock.ForeColor=AppTheme.Muted;lblClock.Font=AppTheme.Bold;lblClock.Margin=new Padding(0,9,18,0);
+        flpHeaderRight.Padding=new Padding(0,24,20,0);
+        btnRefresh.Text="Làm mới";btnDangXuat.Text="Đăng xuất";AppTheme.Button(btnRefresh,true);AppTheme.Button(btnDangXuat);
+        btnRefresh.Size=new Size(125,38);btnDangXuat.Size=new Size(138,38);
+        DecorateButton(btnRefresh,"refresh",Color.White,12);
+        DecorateButton(btnDangXuat,"logout",Color.FromArgb(166,75,80),12);
+        btnDangXuat.ForeColor=Color.FromArgb(166,75,80);
+        tlpCards.Height=132;tlpCards.Padding=new Padding(16,14,16,10);
         var panels=new[]{pnlCard1,pnlCard2,pnlCard3,pnlCard4,pnlCard5};
         var titles=new[]{lblCard1Title,lblCard2Title,lblCard3Title,lblCard4Title,lblCard5Title};
         var values=new[]{lblCard1Value,lblCard2Value,lblCard3Value,lblCard4Value,lblCard5Value};
         var subs=new[]{lblCard1Sub,lblCard2Sub,lblCard3Sub,lblCard4Sub,lblCard5Sub};
-        var colors=new[]{AppTheme.Blue,AppTheme.Teal,AppTheme.Blue,AppTheme.Amber,AppTheme.Teal};
+        var colors=new[]{AppTheme.Blue,AppTheme.Teal,Color.FromArgb(62,118,169),AppTheme.Amber,AppTheme.Blue};
         for(var i=0;i<panels.Length;i++)
         {
+            var index=i;
             var panel=panels[i];
             panel.Margin=new Padding(5,0,5,0);panel.BackColor=Color.White;
-            titles[i].Font=AppTheme.Small;titles[i].ForeColor=AppTheme.Muted;titles[i].Location=new Point(14,10);
-            values[i].Font=i==4?AppTheme.Title:AppTheme.Metric;values[i].ForeColor=colors[i];values[i].Location=new Point(12,30);
-            subs[i].Font=AppTheme.Small;subs[i].Location=new Point(14,72);subs[i].ForeColor=AppTheme.Muted;
+            if(panel is DashboardMetricCard metric)metric.Accent=colors[i];
+            titles[i].Font=AppTheme.Small;titles[i].ForeColor=AppTheme.Muted;titles[i].Location=new Point(16,14);
+            titles[i].AutoSize=false;titles[i].Height=23;titles[i].AutoEllipsis=true;
+            values[i].Font=i==4?AppTheme.Title:AppTheme.Metric;values[i].ForeColor=colors[i];values[i].Location=new Point(14,38);
+            values[i].AutoSize=false;values[i].Height=36;values[i].AutoEllipsis=true;
+            subs[i].Font=AppTheme.Small;subs[i].Location=new Point(16,78);subs[i].ForeColor=AppTheme.Muted;
+            subs[i].AutoSize=false;subs[i].Height=22;subs[i].AutoEllipsis=true;
             var icon=i switch {0=>"bed",1=>"calendar",2=>"people",3=>"clock",_=>"chart"};
-            var badge=new PictureBox {Image=UiIcons.Create(icon,colors[i],22),SizeMode=PictureBoxSizeMode.CenterImage,Size=new Size(32,32),BackColor=Color.FromArgb(243,246,251),Anchor=AnchorStyles.Top|AnchorStyles.Right};
-            badge.Location=new Point(Math.Max(0,panel.ClientSize.Width-44),10);
+            var badge=new PictureBox {Image=UiIcons.Create(icon,colors[i],22),SizeMode=PictureBoxSizeMode.CenterImage,Size=new Size(32,32),BackColor=Color.White};
+            badge.Location=new Point(Math.Max(0,panel.ClientSize.Width-47),12);
             panel.Controls.Add(badge);badge.BringToFront();
-            panel.Resize+=(_,_)=>badge.Left=Math.Max(0,panel.ClientSize.Width-44);
+            badge.Disposed+=(_,_)=>badge.Image?.Dispose();
+            void SizeCard()
+            {
+                badge.Left=Math.Max(0,panel.ClientSize.Width-47);
+                titles[index].Width=Math.Max(30,panel.ClientSize.Width-65);
+                values[index].Width=Math.Max(30,panel.ClientSize.Width-30);
+                subs[index].Width=Math.Max(30,panel.ClientSize.Width-30);
+            }
+            panel.Resize+=(_,_)=>SizeCard();SizeCard();
+            if(panel is DashboardMetricCard hoverCard)
+            {
+                panel.MouseEnter+=(_,_)=>hoverCard.SetHovered(true);
+                panel.MouseLeave+=(_,_)=>hoverCard.SetHovered(false);
+                foreach(Control child in panel.Controls)
+                {
+                    child.MouseEnter+=(_,_)=>hoverCard.SetHovered(true);
+                    child.MouseLeave+=(_,_)=>hoverCard.SetHovered(panel.ClientRectangle.Contains(panel.PointToClient(Cursor.Position)));
+                }
+            }
         }
-        tlpBody.Padding=new Padding(16,4,16,12);tlpBody.ColumnStyles[0].Width=255;tlpBody.ColumnStyles[2].Width=220;
+        tlpBody.Padding=new Padding(16,4,16,14);tlpBody.ColumnStyles[0].Width=278;tlpBody.ColumnStyles[2].Width=236;
         pnlLeftTools.BackColor=AppTheme.Navy;pnlLeftTools.Padding=new Padding(12);pnlLeftTools.AutoScroll=true;
-        lblToolsTitle.Text="ĐIỀU HÀNH";lblToolsTitle.ForeColor=Color.FromArgb(148,168,196);lblToolsTitle.Font=AppTheme.Small;lblToolsTitle.Location=new Point(14,14);
-        txtTimPhong.Location=new Point(14,42);txtTimPhong.Width=128;txtTimPhong.PlaceholderText="Số phòng…";txtTimPhong.Font=AppTheme.Body;
-        btnTimPhong.Location=new Point(148,40);btnTimPhong.Size=new Size(51,30);AppTheme.Button(btnTimPhong);btnTimPhong.Text="Tìm";
+        pnlLeftTools.Controls.Add(new DashboardLogo {Location=new Point(14,14),Size=new Size(38,38)});
+        pnlLeftTools.Controls.Add(new Label {Text="HOTEL DESK",Font=new Font("Segoe UI Semibold",12F,FontStyle.Bold),ForeColor=Color.White,BackColor=AppTheme.Navy,AutoSize=true,Location=new Point(63,20)});
+        lblToolsTitle.ForeColor=Color.FromArgb(131,224,211);lblToolsTitle.Font=AppTheme.Small;lblToolsTitle.Location=new Point(15,64);
+        txtTimPhong.Location=new Point(14,94);txtTimPhong.Width=154;txtTimPhong.PlaceholderText="Tìm số phòng";txtTimPhong.Font=AppTheme.Body;
+        btnTimPhong.Location=new Point(176,92);btnTimPhong.Size=new Size(48,31);AppTheme.Button(btnTimPhong);btnTimPhong.Text="Tìm";
         btnCheckIn.Text="Nhận phòng";btnGoiDichVu.Text="Gọi dịch vụ";btnBaoDonXong.Text="Hoàn tất dọn phòng";
         btnQuanLyKhach.Text="Hồ sơ khách hàng";btnDoiPhong.Text="Chuyển phòng";btnGiaHan.Text="Gia hạn lưu trú";btnBaoTri.Text="Bảo trì phòng";
         pnlLeftTools.Resize+=(_,_)=>ReflowSidebar();
-        tabMainView.Font=AppTheme.Bold;tabMainView.ItemSize=new Size(215,40);tabMainView.DrawMode=TabDrawMode.OwnerDrawFixed;
+        tabMainView.Font=AppTheme.Bold;tabMainView.ItemSize=new Size(173,42);tabMainView.DrawMode=TabDrawMode.OwnerDrawFixed;
+        tabMainView.BackColor=AppTheme.Canvas;
         var tabIcons=new Dictionary<TabPage,Image>
         {
             [tabMatrix]=UiIcons.Create("bed",AppTheme.Blue,17),
             [tabLichTrinh]=UiIcons.Create("calendar",AppTheme.Blue,17),
             [tabThongKe]=UiIcons.Create("chart",AppTheme.Blue,17)
         };
+        tabMainView.Disposed+=(_,_)=>{foreach(var icon in tabIcons.Values)icon.Dispose();};
         tabMainView.DrawItem+=(_,e)=>
         {
             var active=e.Index==tabMainView.SelectedIndex;
-            using var brush=new SolidBrush(active?Color.White:AppTheme.Canvas);e.Graphics.FillRectangle(brush,e.Bounds);
+            using var brush=new SolidBrush(active?Color.White:Color.FromArgb(239,245,248));e.Graphics.FillRectangle(brush,e.Bounds);
             var page=tabMainView.TabPages[e.Index];
             if(tabIcons.TryGetValue(page,out var icon))e.Graphics.DrawImage(icon,e.Bounds.Left+13,e.Bounds.Top+11,17,17);
             var textBounds=new Rectangle(e.Bounds.Left+32,e.Bounds.Top,e.Bounds.Width-35,e.Bounds.Height);
             TextRenderer.DrawText(e.Graphics,page.Text,AppTheme.Bold,textBounds,active?AppTheme.Blue:AppTheme.Muted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
-            if(active){using var pen=new Pen(AppTheme.Blue,3);e.Graphics.DrawLine(pen,e.Bounds.Left+20,e.Bounds.Bottom-2,e.Bounds.Right-20,e.Bounds.Bottom-2);}
+            if(active){using var pen=new Pen(AppTheme.Teal,3);e.Graphics.DrawLine(pen,e.Bounds.Left+16,e.Bounds.Bottom-2,e.Bounds.Right-16,e.Bounds.Bottom-2);}
         };
         tabMainView.SelectedIndexChanged+=(_,_)=>
         {
@@ -79,29 +111,42 @@ public partial class ucDashboard
         AddRoomSection("PHÒNG ĐÔI",flpDoi,lblDoiSummary,1,AppTheme.Blue);
         AddRoomSection("PHÒNG VIP",flpVIP,lblVipSummary,2,Color.FromArgb(139,92,246));
         tlpRoomColumns.ResumeLayout(true);
-        scMatrix.FixedPanel=FixedPanel.None;scMatrix.SplitterWidth=10;scMatrix.BackColor=AppTheme.Canvas;
-        void ResizeRooms(){if(scMatrix.Height>300)scMatrix.SplitterDistance=Math.Max(200,scMatrix.Height-190);}
-        scMatrix.Resize+=(_,_)=>ResizeRooms();ResizeRooms();
+        scMatrix.BackColor=AppTheme.Canvas;
+        scMatrix.RowStyles[1].Height=190;
         AppTheme.Grid(dgvDatCoc);AppTheme.Grid(dgvLichTrinh);
-        pnlRight.BackColor=Color.White;lblRightTitle1.Font=AppTheme.Bold;lblRightTitle1.ForeColor=AppTheme.Amber;
-        lblRightTitle2.Text="Dịch vụ đang chờ";lblRightTitle2.Font=AppTheme.Bold;lblRightTitle2.ForeColor=AppTheme.Ink;
-        foreach(var flow in new[]{flpDonPhong,flpYeuCauKhach}){flow.BorderStyle=BorderStyle.None;flow.BackColor=AppTheme.Canvas;}
+        pnlRight.BackColor=Color.White;pnlRight.Padding=new Padding(14);
+        pnlRight.Paint+=(_,e)=>{using var edge=new Pen(AppTheme.Border);e.Graphics.DrawRectangle(edge,0,0,pnlRight.Width-1,pnlRight.Height-1);};
+        lblRightTitle1.Font=AppTheme.Bold;lblRightTitle1.ForeColor=AppTheme.Amber;lblRightTitle1.Location=new Point(16,17);
+        lblRightTitle2.Text="Dịch vụ đang chờ";lblRightTitle2.Font=AppTheme.Bold;lblRightTitle2.ForeColor=AppTheme.Ink;lblRightTitle2.Location=new Point(16,242);
+        flpDonPhong.Location=new Point(14,50);flpDonPhong.Height=178;
+        flpYeuCauKhach.Location=new Point(14,273);
+        foreach(var flow in new[]{flpDonPhong,flpYeuCauKhach}){flow.BorderStyle=BorderStyle.None;flow.BackColor=Color.FromArgb(246,249,251);}
+        pnlRight.Resize+=(_,_)=>
+        {
+            var width=Math.Max(80,pnlRight.ClientSize.Width-28);
+            flpDonPhong.Width=width;flpYeuCauKhach.Width=width;
+            flpYeuCauKhach.Height=Math.Max(80,pnlRight.ClientSize.Height-flpYeuCauKhach.Top-15);
+        };
         var legend=new FlowLayoutPanel {Dock=DockStyle.Top,Height=32,BackColor=Color.White,Padding=new Padding(8,5,0,0),WrapContents=false};
         foreach(var status in new[]{RoomStatus.Trong,RoomStatus.DaDat,RoomStatus.DangO,RoomStatus.DangDon,RoomStatus.BaoTri})
         {
             legend.Controls.Add(new Label {Text=$"● {Ui.Status(status)}",AutoSize=true,Font=AppTheme.Small,ForeColor=AppTheme.RoomColor(status),Margin=new Padding(0,2,12,0)});
         }
         legend.Controls.Add(new Label {Text="• Có lịch đặt: chấm vàng",AutoSize=true,Font=AppTheme.Small,ForeColor=AppTheme.Muted,Margin=new Padding(0,2,0,0)});
-        scMatrix.Panel1.Controls.Add(legend);
+        var roomArea=new Panel {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas};
+        scMatrix.Controls.Remove(tlpRoomColumns);
+        roomArea.Controls.Add(tlpRoomColumns);
+        roomArea.Controls.Add(legend);
+        scMatrix.Controls.Add(roomArea,0,0);
         tabThongKe.Padding=new Padding(0);pnlChartContainer.BackColor=AppTheme.Canvas;
         ResumeLayout(true);
     }
     private void AddRoomSection(string title,FlowLayoutPanel flow,Label summary,int column,Color accent)
     {
-        var card=new TableLayoutPanel {Dock=DockStyle.Fill,BackColor=Color.White,ColumnCount=1,RowCount=2,Margin=new Padding(6),Padding=new Padding(0)};
+        var card=new TableLayoutPanel {Dock=DockStyle.Fill,BackColor=Color.White,ColumnCount=1,RowCount=2,Margin=new Padding(5),Padding=new Padding(0)};
         card.RowStyles.Add(new RowStyle(SizeType.Absolute,58));card.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-        card.Paint+=(_,e)=>{using var pen=new Pen(Color.FromArgb(222,229,239));e.Graphics.DrawRectangle(pen,0,0,card.Width-1,card.Height-1);};
-        var header=new Panel {Dock=DockStyle.Fill,BackColor=Color.FromArgb(248,250,254),Padding=new Padding(14,7,12,5)};
+        card.Paint+=(_,e)=>{using var pen=new Pen(AppTheme.Border);e.Graphics.DrawRectangle(pen,0,0,card.Width-1,card.Height-1);};
+        var header=new Panel {Dock=DockStyle.Fill,BackColor=Color.FromArgb(242,248,249),Padding=new Padding(14,7,12,5)};
         header.Paint+=(_,e)=>{using var brush=new SolidBrush(accent);e.Graphics.FillRectangle(brush,0,0,4,header.Height);};
         var name=new Label {Text=title,Dock=DockStyle.Top,Height=25,Font=AppTheme.Bold,ForeColor=AppTheme.Ink,TextAlign=ContentAlignment.MiddleLeft};
         summary.Dock=DockStyle.Top;summary.Height=19;summary.Font=AppTheme.Small;summary.ForeColor=AppTheme.Muted;
@@ -118,37 +163,29 @@ public partial class ucDashboard
     {
         if(pnlLeftTools.IsDisposed)return;
         pnlLeftTools.AutoScrollPosition=Point.Empty;
+        txtTimPhong.Width=Math.Max(90,pnlLeftTools.ClientSize.Width-86);
+        btnTimPhong.Left=txtTimPhong.Right+8;
         var buttons=pnlLeftTools.Controls.OfType<Button>().Where(b=>b!=btnTimPhong && b.Visible).OrderBy(b=>b.Top).ToArray();
         var width=Math.Max(140,pnlLeftTools.ClientSize.Width-34);
-        var y=txtTimPhong.Visible?88:52;
+        var y=txtTimPhong.Visible?140:98;
         foreach(var button in buttons)
         {
             var title=button.AccessibleName??button.Text;
             button.AccessibleName=title;
-            button.Location=new Point(12,y);button.Size=new Size(width,36);
+            button.Location=new Point(12,y);button.Size=new Size(width,38);
             AppTheme.Button(button,button==btnCheckIn||button==btnDatLichPhong);
             button.Font=AppTheme.Small;
-            DecorateButton(button,UiIcons.Kind(title),Color.White,8);
+            DecorateButton(button,UiIcons.Kind(title),Color.White,11);
             if(button!=btnCheckIn && button!=btnDatLichPhong)
             {
                 button.BackColor=AppTheme.Navy;button.ForeColor=Color.FromArgb(217,226,238);
                 button.FlatAppearance.BorderSize=0;button.TextAlign=ContentAlignment.MiddleLeft;
-                button.FlatAppearance.MouseOverBackColor=Color.FromArgb(37,54,78);
-                button.FlatAppearance.MouseDownBackColor=Color.FromArgb(46,68,98);
+                button.FlatAppearance.MouseOverBackColor=Color.FromArgb(37,76,98);
+                button.FlatAppearance.MouseDownBackColor=Color.FromArgb(31,91,104);
             }
             button.UseVisualStyleBackColor=false;
-            if(paintedSidebarButtons.Add(button))
-            {
-                button.Text=string.Empty;
-                button.Paint+=(_,e)=>
-                {
-                    var label=button.AccessibleName??string.Empty;
-                    var bounds=new Rectangle(36,0,Math.Max(0,button.Width-40),button.Height);
-                    using var fill=new SolidBrush(button.BackColor);e.Graphics.FillRectangle(fill,bounds);
-                    TextRenderer.DrawText(e.Graphics,label,AppTheme.Small,bounds,Color.White,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
-                };
-            }
-            y+=41;
+            button.Text=title;
+            y+=44;
         }
         pnlLeftTools.AutoScrollMinSize=new Size(0,y+12);
     }
@@ -163,5 +200,6 @@ public partial class ucDashboard
         if(!decoratedButtons.Add(button))return;
         var icon=UiIcons.Create(kind,color,18);
         button.Paint+=(_,e)=>e.Graphics.DrawImage(icon,iconLeft,(button.Height-18)/2,18,18);
+        button.Disposed+=(_,_)=>icon.Dispose();
     }
 }

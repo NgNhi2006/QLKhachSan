@@ -24,23 +24,23 @@
             btnRefresh = new System.Windows.Forms.Button();
             btnDangXuat = new System.Windows.Forms.Button();
             tlpCards = new System.Windows.Forms.TableLayoutPanel();
-            pnlCard1 = new System.Windows.Forms.Panel();
+            pnlCard1 = new DashboardMetricCard();
             lblCard1Sub = new System.Windows.Forms.Label();
             lblCard1Value = new System.Windows.Forms.Label();
             lblCard1Title = new System.Windows.Forms.Label();
-            pnlCard2 = new System.Windows.Forms.Panel();
+            pnlCard2 = new DashboardMetricCard();
             lblCard2Sub = new System.Windows.Forms.Label();
             lblCard2Value = new System.Windows.Forms.Label();
             lblCard2Title = new System.Windows.Forms.Label();
-            pnlCard3 = new System.Windows.Forms.Panel();
+            pnlCard3 = new DashboardMetricCard();
             lblCard3Sub = new System.Windows.Forms.Label();
             lblCard3Value = new System.Windows.Forms.Label();
             lblCard3Title = new System.Windows.Forms.Label();
-            pnlCard4 = new System.Windows.Forms.Panel();
+            pnlCard4 = new DashboardMetricCard();
             lblCard4Sub = new System.Windows.Forms.Label();
             lblCard4Value = new System.Windows.Forms.Label();
             lblCard4Title = new System.Windows.Forms.Label();
-            pnlCard5 = new System.Windows.Forms.Panel();
+            pnlCard5 = new DashboardMetricCard();
             lblCard5Sub = new System.Windows.Forms.Label();
             lblCard5Value = new System.Windows.Forms.Label();
             lblCard5Title = new System.Windows.Forms.Label();
@@ -59,7 +59,7 @@
             lblToolsTitle = new System.Windows.Forms.Label();
             tabMainView = new System.Windows.Forms.TabControl();
             tabMatrix = new System.Windows.Forms.TabPage();
-            scMatrix = new System.Windows.Forms.SplitContainer();
+            scMatrix = new System.Windows.Forms.TableLayoutPanel();
             tlpRoomColumns = new System.Windows.Forms.TableLayoutPanel();
             flpDon = new System.Windows.Forms.FlowLayoutPanel();
             flpDoi = new System.Windows.Forms.FlowLayoutPanel();
@@ -89,9 +89,6 @@
             pnlLeftTools.SuspendLayout();
             tabMainView.SuspendLayout();
             tabMatrix.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)scMatrix).BeginInit();
-            scMatrix.Panel1.SuspendLayout();
-            scMatrix.Panel2.SuspendLayout();
             scMatrix.SuspendLayout();
             tlpRoomColumns.SuspendLayout();
             grpDatCoc.SuspendLayout();
@@ -683,20 +680,16 @@
             // scMatrix
             // 
             scMatrix.Dock = System.Windows.Forms.DockStyle.Fill;
-            scMatrix.FixedPanel = System.Windows.Forms.FixedPanel.Panel1;
             scMatrix.Location = new System.Drawing.Point(6, 6);
             scMatrix.Name = "scMatrix";
-            scMatrix.Orientation = System.Windows.Forms.Orientation.Horizontal;
-            // 
-            // scMatrix.Panel1
-            // 
-            scMatrix.Panel1.Controls.Add(tlpRoomColumns);
-            // 
-            // scMatrix.Panel2
-            // 
-            scMatrix.Panel2.Controls.Add(grpDatCoc);
+            scMatrix.ColumnCount = 1;
+            scMatrix.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            scMatrix.RowCount = 2;
+            scMatrix.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            scMatrix.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 190F));
+            scMatrix.Controls.Add(tlpRoomColumns, 0, 0);
+            scMatrix.Controls.Add(grpDatCoc, 0, 1);
             scMatrix.Size = new System.Drawing.Size(784, 488);
-            scMatrix.SplitterDistance = 250;
             scMatrix.TabIndex = 0;
             // 
             // tlpRoomColumns
@@ -948,9 +941,6 @@
             pnlLeftTools.PerformLayout();
             tabMainView.ResumeLayout(false);
             tabMatrix.ResumeLayout(false);
-            scMatrix.Panel1.ResumeLayout(false);
-            scMatrix.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)scMatrix).EndInit();
             scMatrix.ResumeLayout(false);
             tlpRoomColumns.ResumeLayout(false);
             grpDatCoc.ResumeLayout(false);
@@ -1008,7 +998,7 @@
         private System.Windows.Forms.Button btnBaoTri;
         private System.Windows.Forms.TabControl tabMainView;
         private System.Windows.Forms.TabPage tabMatrix;
-        private System.Windows.Forms.SplitContainer scMatrix;
+        private System.Windows.Forms.TableLayoutPanel scMatrix;
         private System.Windows.Forms.TableLayoutPanel tlpRoomColumns;
         private System.Windows.Forms.FlowLayoutPanel flpDon;
         private System.Windows.Forms.FlowLayoutPanel flpDoi;
