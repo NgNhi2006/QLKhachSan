@@ -6,7 +6,7 @@
 
 **[Thông tin](docs/THONG_TIN.md)** — giải thích toàn bộ chức năng, nút bấm, mã nguồn và database.
 
-Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **nút → hàm → tệp/dòng → bảng SQL**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
+Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **ô nhập/dữ liệu nguồn → nút → hàm GUI → hàm BLL → câu SQL/bảng → kết quả trên màn hình**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
 
 ## Chạy ứng dụng
 
