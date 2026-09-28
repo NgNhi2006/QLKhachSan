@@ -4,7 +4,7 @@
 
 ## Đọc tài liệu
 
-**[Thông tin](docs/THONG_TIN.md)** — giải thích toàn bộ chức năng, nút bấm, mã nguồn và database.
+**[Thông tin và giải thích mã nguồn](docs/THONG_TIN.md)** — một tài liệu duy nhất để xem chức năng, nút bấm, luồng dữ liệu, mã giao diện, nghiệp vụ, SQL, cấu hình và các ví dụ theo dõi thao tác.
 
 Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **ô nhập/dữ liệu nguồn → nút → hàm GUI → hàm BLL → câu SQL/bảng → kết quả trên màn hình**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
 
