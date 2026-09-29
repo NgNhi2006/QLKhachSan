@@ -46,7 +46,7 @@ public partial class ucDashboard
         var qr=new PictureBox {Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.White};bank.Controls.Add(qr,0,2);
         billPanel.Controls.Add(bank,1,0);
         dialog.Add("",billPanel);
-        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản"});dialog.Add("Phương thức thanh toán / hoàn tiền",method);
+        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS","Công nợ OTA"});var reference=Ui.Text(100);dialog.Add("Phương thức thanh toán / hoàn tiền",method);dialog.Add("Mã giao dịch QR/POS/OTA",reference);
         void UpdatePayment()
         {
             var transfer=(string?)method.SelectedItem=="Chuyển khoản" && bill.ToCollect>0;
@@ -68,7 +68,7 @@ public partial class ucDashboard
         {
             if(!confirm.Checked)throw new BusinessException("Cần xác nhận đã hoàn tất thu/hoàn tiền.");
             long invoiceId=0;
-            await Changed(async()=>invoiceId=await service.CheckoutAsync(bill,(string)method.SelectedItem!));
+            await Changed(async()=>invoiceId=await service.CheckoutAsync(bill,(string)method.SelectedItem!,reference.Text));
             MessageBox.Show(dialog,$"Đã lưu hóa đơn #{invoiceId}. Phòng chuyển sang đang dọn.","Hoàn tất");
         });
         dialog.ShowDialog(this);

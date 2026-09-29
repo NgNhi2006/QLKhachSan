@@ -48,20 +48,7 @@ public partial class ucDashboard
     }
     private void ExportGrid(DataGridView grid,string filename)
     {
-        using var save=new SaveFileDialog {Filter="CSV UTF-8 (*.csv)|*.csv",FileName=$"{filename}-{ServerNow:yyyyMMdd-HHmm}.csv",OverwritePrompt=true};
-        if(save.ShowDialog(this)!=DialogResult.OK)return;
-        var columns=grid.Columns.Cast<DataGridViewColumn>().Where(c=>c.Visible).OrderBy(c=>c.DisplayIndex).ToArray();
-        static string Cell(object? value)
-        {
-            var text=value switch {DateTime date=>date.ToString("yyyy-MM-dd HH:mm:ss"),decimal money=>money.ToString(System.Globalization.CultureInfo.InvariantCulture),_=>value?.ToString()??""};
-            // Spreadsheet applications must treat user-provided values as text, not formulas.
-            if(value is string && text.TrimStart().FirstOrDefault() is '=' or '+' or '-' or '@')text="'"+text;
-            return "\""+text.Replace("\"","\"\"")+"\"";
-        }
-        using var writer=new StreamWriter(save.FileName,false,new UTF8Encoding(true));
-        writer.WriteLine(string.Join(",",columns.Select(c=>Cell(c.HeaderText))));
-        foreach(DataGridViewRow row in grid.Rows)writer.WriteLine(string.Join(",",columns.Select(c=>Cell(row.Cells[c.Index].Value))));
-        MessageBox.Show(this,"Đã xuất CSV UTF-8, có thể mở bằng Excel.","Xuất báo cáo");
+        ExcelExport.ExportGrid(this,grid,filename,ServerNow);
     }
     private void PrintInvoice(Invoice invoice,Stay stay,IReadOnlyList<ServiceLine> services)
     {

@@ -2,6 +2,8 @@
 
 [← README](../README.md)
 
+**Cập nhật V6:** tài liệu này mô tả luồng lưu trú và bổ sung bản đồ mã nguồn kế toán ở [mục 20](#20-phân-hệ-tài-chính---kế-toán-v6). Xem thêm [quy trình và giới hạn Tài chính - Kế toán](ACCOUNTING_FINANCE.md). Các địa chỉ dòng của phần lưu trú là mốc tham khảo; ưu tiên tìm theo tên hàm khi mã thay đổi.
+
 Tài liệu này giải thích chương trình như một khách sạn có **quầy tiếp tân, người kiểm tra quy tắc và kho sổ sách**. Bạn có thể đọc từ trên xuống để hiểu luồng, hoặc tìm tên nút trong các bảng. Mỗi địa chỉ dạng `GUI/ucDashboard.cs:301` nghĩa là **tệp ở dòng 301**, tính từ thư mục `QLKhachSan/`. Ví dụ, đường dẫn đầy đủ của địa chỉ đó là [`QLKhachSan/GUI/ucDashboard.cs`](../QLKhachSan/GUI/ucDashboard.cs). Số dòng khớp với phiên bản mã khi viết tài liệu; nếu thêm/xóa code, hãy tìm tên hàm được ghi cạnh số dòng.
 
 ## Mục lục
@@ -25,6 +27,7 @@ Tài liệu này giải thích chương trình như một khách sạn có **qu�
 17. [Nghiệp vụ và dữ liệu](#phan-17)
 18. [Cơ sở dữ liệu và cấu hình](#phan-18)
 19. [Ví dụ theo dõi một thao tác](#phan-19)
+20. [Phân hệ Tài chính - Kế toán V6](#20-phân-hệ-tài-chính---kế-toán-v6)
 
 ## 1. Chương trình hoạt động ra sao?
 
@@ -53,7 +56,7 @@ Ví dụ khi nhấn **Đặt trước / Giữ chỗ**: sự kiện ở `GUI/ucDa
 
 | Điều bạn làm | Mã nhận nút → xử lý | Database và giải thích |
 | --- | --- | --- |
-| Mở ứng dụng | `Program.cs` → `GUI/FormLogin.cs:90` → `DAL/SchemaMigrator.cs:7` | Kiểm tra `SchemaVersion`, tự chạy migration V2–V5 nếu cần. Kết nối lấy từ `DAL/DatabaseHelper.cs:19` và `appsettings.json`. |
+| Mở ứng dụng | `Program.cs` → `GUI/FormLogin.cs` → `DAL/SchemaMigrator.cs` | Kiểm tra `SchemaVersion`, tự chạy migration V2–V6 nếu cần. Kết nối lấy từ `DAL/DatabaseHelper.cs` và `appsettings.json`; lỗi migration hiển thị phiên bản, mã SQL và dòng lỗi. |
 | Lần đầu tạo Admin | `GUI/FormLogin.cs:108-118` → `BLL/AuthService.cs:18-32` | Xem `Users` có tài khoản đang dùng chưa, rồi thêm Admin vào `Users`. |
 | **Đăng nhập** | `GUI/FormLogin.cs:108` → `BLL/AuthService.cs:33` → `DAL/HotelRepository.cs:83,88` | Tìm `Users` theo tên, kiểm tra mật khẩu băm, trạng thái hoạt động và khóa tạm. Đăng nhập sai cập nhật số lần sai trong `Users`. |
 | Chọn tài khoản đã nhớ | `GUI/FormLogin.cs:78` → `GUI/RememberedLogin.cs:11` | Đọc tệp trên **máy Windows hiện tại**, không đọc database. |
@@ -66,10 +69,10 @@ Mật khẩu được băm bằng PBKDF2 SHA-512 với muối ngẫu nhiên (`BL
 
 | Vai trò | Được làm gì | Nơi kiểm tra |
 | --- | --- | --- |
-| Admin | Vận hành, xem tài chính, quản lý danh mục và tài khoản | `BLL/RolePolicy.cs:6-11`; `BLL/HotelService.cs:9-13` |
-| Reception | Đặt/nhận/trả phòng, cọc, dịch vụ, tra khách | `BLL/RolePolicy.cs:6,9` |
-| Accountant | Xem hóa đơn, doanh thu, thu/hoàn; không ghi nghiệp vụ | `BLL/RolePolicy.cs:7` |
-| Manager | Xem vận hành và tài chính, quản lý danh mục/bảo trì; không ghi đặt/thu/trả | `BLL/RolePolicy.cs:7,9-11` |
+| Admin | Vận hành, tài chính, danh mục và tài khoản | `BLL/RolePolicy.cs`; `BLL/HotelService.Finance.cs` |
+| Reception | Đặt/nhận/trả phòng, cọc, dịch vụ, tra khách và ca cá nhân | `BLL/RolePolicy.cs`; `BLL/HotelService.Finance.cs` |
+| Accountant | Xem/ghi sổ kế toán, duyệt khóa ca/kỳ, không thực hiện nghiệp vụ lễ tân | `BLL/RolePolicy.cs`; `BLL/HotelService.Finance.cs` |
+| Manager | Xem vận hành, ghi sổ tài chính, quản lý danh mục/bảo trì; không ghi đặt/thu/trả phòng | `BLL/RolePolicy.cs`; `BLL/HotelService.Finance.cs` |
 
 Menu và các tab được ẩn/hiện theo quyền tại `GUI/ucDashboard.cs:57-86`; tên và thẻ thống kê riêng theo vai trò ở `GUI/ucDashboard.Roles.cs:7-69`. BLL **kiểm tra quyền lần nữa**, nên việc hiện nút không tự tạo quyền ghi.
 
@@ -96,9 +99,9 @@ Dashboard tự tải lại mỗi 60 giây khi đang hiển thị và không bậ
 | Nút / chức năng | Nó làm gì, nói đơn giản | GUI → BLL | SQL: đọc → ghi |
 | --- | --- | --- | --- |
 | **+ Nhận phòng ngay**, thẻ phòng trống | Tạo khách và lượt ở ngay, phòng đổi sang đang ở | `GUI/ucDashboard.cs:308,310` → `GUI/ucDashboard.Actions.cs:56,95` → `BLL/HotelService.cs:48` | Đọc `Rooms`, `Stays` để kiểm tra; ghi `Customers`, `Stays` (`DAL/HotelTransaction.Commands.cs:7-10`), `StaySegments` (`:18`), `Rooms` (`:13-16`), `AuditLog`. |
-| **Đặt trước / Giữ chỗ** | Giữ một khoảng ngày và tùy chọn nhận cọc | `GUI/ucDashboard.cs:309` → `GUI/ucDashboard.Actions.cs:56,95` → `BLL/HotelService.cs:48` | Đọc `Rooms`, `Stays`; ghi `Customers`, `Stays` (`DAL/HotelTransaction.Commands.cs:7-10`); tăng `Rooms.Version` nhưng giữ trạng thái phòng (`BLL/HotelService.cs:65`); nếu có cọc ghi `Payments` (`DAL/HotelTransaction.Commands.cs:27-28`); ghi `AuditLog`. |
+| **Đặt trước / Giữ chỗ** | Giữ một khoảng ngày và tùy chọn nhận cọc | `GUI/ucDashboard.cs:309` → `GUI/ucDashboard.Actions.cs:56,95` → `BLL/HotelService.cs:48` | Đọc `Rooms`, `Stays`; ghi `Customers`, `Stays` (`DAL/HotelTransaction.Commands.cs:7-10`); tăng `Rooms.Version` nhưng giữ trạng thái phòng (`BLL/HotelService.cs:65`); nếu có cọc ghi `Payments` (`DAL/HotelTransaction.Commands.cs:27-28`); ghi `AuditLog`. [Xem từng ô, từng cột và khóa liên kết ở mục 10.3](#103-đặt-trước-và-nhận-phòng-ngay-mỗi-ô-đi-vào-tham-số-nào). |
 | **Nhận phòng** từ bảng/lịch | Đổi lượt Reserved sang Occupied khi phòng thực sự trống | `GUI/ucDashboard.cs:317-324` hoặc `:236-249` → `BLL/HotelService.cs:72` | Đọc `Stays`, `Rooms` và lịch trùng; sửa `Stays` (`DAL/HotelTransaction.Commands.cs:20`), thêm `StaySegments` (`:18`), sửa `Rooms` (`:13`). |
-| **Sửa lịch / khách** | Đổi phòng, tên/SĐT/CCCD, ngày đến/trả và hạn nhận; phải ghi lý do | `GUI/ucDashboard.Management.cs:43,53` → `BLL/HotelService.Management.cs:27` | Đọc `Stays`, `Rooms` và lịch trùng; sửa/thêm `Customers`, sửa `Stays` (`DAL/HotelTransaction.Management.cs:38-41`), tăng `Rooms.Version` của phòng liên quan (`BLL/HotelService.Management.cs:38-39`); ghi `AuditLog`. Cọc đã thu được giữ nguyên. |
+| **Sửa thông tin khách** | Trong **bảng đặt trước**, bấm nút trên đúng dòng khách; sửa họ tên/SĐT/CCCD, hoặc đổi phòng, ngày đến/trả và hạn nhận; phải ghi lý do | `GUI/ucDashboard.cs:202,317-324` → `GUI/ucDashboard.Management.cs:43,53` → `BLL/HotelService.Management.cs:27` | Đọc `Stays`, `Rooms` và lịch trùng; sửa/thêm `Customers`, sửa `Stays` (`DAL/HotelTransaction.Management.cs:38-41`), tăng `Rooms.Version` của phòng liên quan (`BLL/HotelService.Management.cs:38-39`); ghi `AuditLog`. Cọc đã thu được giữ nguyên. [Xem đường sửa chi tiết ở mục 10.3.3](#sua-thong-tin-khach). |
 | **Hủy đặt phòng** | Hủy trước hạn thì hoàn cọc; quá hạn thì ghi cọc không hoàn | `GUI/ucDashboard.Actions.cs:102,109` → `BLL/HotelService.cs:85` | Đọc `Stays` và tiền cọc; sửa `Stays` (`DAL/HotelTransaction.Commands.cs:23`), thêm `Payments` loại Refund hoặc Forfeit nếu tiền >0 (`:27-28`), tăng `Rooms.Version` nhưng không đổi trạng thái (`BLL/HotelService.cs:96`), ghi `AuditLog`. |
 | Tự hủy lượt quá hạn | Xử lý lượt chưa check-in khi làm mới hoặc đến chu kỳ 60 giây | `GUI/ucDashboard.cs:39-49,301` → `BLL/HotelService.cs:99` | Đọc `Stays`; sửa `Stays`, thêm `Payments` loại Forfeit nếu mất cọc, tăng `Rooms.Version` (`BLL/HotelService.cs:107`); ghi `AuditLog`. |
 | **Thu cọc bổ sung / Ghi nhận thu** | Ghi số tiền thật đã nhận, không gia hạn hạn giữ | `GUI/ucDashboard.Management.cs:12,36` → `BLL/HotelService.Management.cs:50` | Đọc `Stays`; tăng `Stays.Deposit` (`DAL/HotelTransaction.Management.cs:37`), thêm `Payments` loại Deposit (`DAL/HotelTransaction.Commands.cs:27`). |
@@ -221,6 +224,8 @@ Lệnh gốc tạo các bảng ở [`Database/Setup.sql`](../Database/Setup.sql)
 | `Payments` | Mỗi lần thu cọc, thu checkout, hoàn hoặc ghi cọc mất | Tạo `Database/Setup.sql:71`; thêm `DAL/HotelTransaction.Commands.cs:27`; đọc `DAL/HotelTransaction.Management.cs:46`. Nối `Stays`, `Users`. |
 | `AuditLog` | Ai đã thao tác gì, lúc nào | Tạo `Database/Setup.sql:77`; thêm `DAL/HotelRepository.cs:92`; đọc `DAL/HotelTransaction.Management.cs:58`. Nối `Users`. |
 
+**Các bảng bổ sung ở V6** được tạo bởi [`Database/MigrateV6.sql`](../Database/MigrateV6.sql). `AccountingPeriods` lưu tháng đã khóa; `CashShifts` lưu ca và số đếm; `Payments` và `ServiceOrders` có thêm `ShiftId`, `Payments` có thêm `ExternalReference`. `FinanceOpeningBalances`, `FinanceVouchers`, `BankStatementLines` phục vụ sổ quỹ và sao kê. `FinanceDebts` cùng `DebtAllocations` lưu nợ và các đợt gạch nợ. `StockItems`, `StockMovements`, `HousekeepingConsumption` lưu tồn, giá vốn và báo tiêu thụ. `InvoiceFinance`, `InvoiceAdjustments`, `InvoiceVoids`, `BillGroups`, `BillShares` lưu thông tin hóa đơn và phân bổ bill. Các trigger trong migration chặn sửa chứng từ thuộc ca hoặc kỳ đã khóa.
+
 **Nhớ sự khác nhau:** `Customers` là *người*, `Stays` là *lần người đó đến ở*, `Rooms` là *căn phòng*, `StaySegments` là *người ấy ở phòng nào trong từng đoạn thời gian*. Một khách có thể ở nhiều lần; một lần ở có thể chuyển qua nhiều phòng. `Payments` là tiền đi vào/ra, còn `Invoices` là phiếu tổng kết khi kết thúc.
 
 | Loại `Payments.Kind` | Nghĩa | `CashFlow` trong `DTO/HotelModels.cs:46` |
@@ -245,8 +250,9 @@ Số tiền bằng 0 không tạo dòng `Payments` (`DAL/HotelTransaction.Comman
 ## 9. Bảo vệ dữ liệu, nâng cấp và xuất file
 
 - **Không để hai người ghi đè nhau:** `DAL/HotelRepository.cs:12-34` chạy giao dịch SQL mức `Serializable`; `:75` lấy khóa ứng dụng. `Version` ở `Rooms`, `Stays`, `Services` giúp từ chối thay đổi dựa trên dữ liệu đã cũ. Mọi giá trị người dùng đưa vào SQL được truyền như tham số (`DAL/HotelRepository.cs:36-73`).
-- **Nâng cấp schema:** `Database/Setup.sql:18-80` tạo bản 1. `Database/MigrateV2.sql:18-30` thêm phiên bản bảo mật, giao dịch dịch vụ từng phần, chỉ mục tránh hai khách cùng chiếm phòng. `Database/MigrateV3.sql:17-32` thêm bốn vai trò và lưu trữ tài khoản cũ. `Database/MigrateV4.sql:17-28` bổ sung loại phòng và 10 phòng 401–410; `Database/MigrateV5.sql:7-11` chuyển các phòng đó thành VIP. `DAL/SchemaMigrator.cs:7` chạy tuần tự phần còn thiếu khi login. Bản cài trống có 50 phòng từ `Setup.sql:94-108`, thêm 10 ở V4 thành 60 phòng nếu không bị sửa/xóa.
+- **Nâng cấp schema:** `Database/Setup.sql:18-80` tạo bản 1. `MigrateV2.sql` bổ sung kiểm soát lịch/dịch vụ, `MigrateV3.sql` thêm vai trò và lưu trữ tài khoản cũ, `MigrateV4.sql` thêm phòng, `MigrateV5.sql` chuyển hạng VIP, `MigrateV6.sql` thêm kế toán. `DAL/SchemaMigrator.cs` chạy tuần tự phần còn thiếu khi login. Lỗi SQL khi nâng cấp được bọc trong `SchemaMigrationException` và hiện phiên bản, mã, dòng lỗi trên login. Bản cài trống có 50 phòng từ `Setup.sql:94-108`, thêm 10 ở V4 thành 60 phòng nếu không bị sửa/xóa.
 - **Xuất CSV:** `GUI/ucDashboard.Export.cs:11,17,33,41,49` tạo file UTF-8 có BOM để Excel đọc tiếng Việt, đồng thời chặn ô bắt đầu bằng ký tự công thức. Không xóa hay thay đổi bản ghi SQL.
+- **Xuất Excel:** `GUI/Ui.cs` gắn menu xuất `.xlsx` cho các `DataGridView` tạo qua `Ui.Grid()`. `GUI/ExcelExport.cs` ghi file với tiêu đề, ngày lập và kiểu số tiền `#,##0 VNĐ`; màn hình kế toán có thêm nút **Xuất Excel**.
 - **In và QR:** `GUI/ucDashboard.Export.cs:66` in phiếu thanh toán nội bộ. `GUI/PaymentQr.cs:58-61` đổi nội dung QR theo cách trả tiền; QR chuyển khoản chỉ hỗ trợ hiển thị thông tin thanh toán. Nhân viên vẫn phải kiểm tra tiền thực nhận rồi xác nhận, vì chương trình chưa kết nối ngân hàng để đối soát tự động. Cấu hình ở [`appsettings.json`](../QLKhachSan/appsettings.json).
 
 Nếu muốn lần theo bất kỳ thao tác nào: tìm tên nút ở mục 3–6, mở vị trí `GUI`, theo tên hàm sang `BLL`, rồi đến `DAL` để xem đúng câu `SELECT`/`INSERT`/`UPDATE` và bảng liên quan.
@@ -280,7 +286,7 @@ Một hàm có hậu tố `Async` trả kết quả sau khi SQL xong. Ví dụ `
 
 ### 10.3 Đặt trước và nhận phòng ngay: mỗi ô đi vào tham số nào?
 
-`ShowBooking(reserve,selected)` mở form (`GUI/ucDashboard.Actions.cs:56-60`). `reserve=true` nghĩa là đặt trước; `false` nghĩa là nhận ngay. Danh sách phòng ban đầu lấy từ `data.Rooms`, danh sách lịch lấy từ `data.Stays` để lọc sơ bộ (`:58,76-84`).
+`ShowBooking(reserve,selected)` mở form (`GUI/ucDashboard.Actions.cs:56-60`). Nút **Đặt trước / Giữ chỗ** gọi nó với `reserve=true` (`GUI/ucDashboard.cs:309`); nhận ngay dùng `false`. Danh sách phòng ban đầu lấy từ `data.Rooms`, danh sách lịch lấy từ `data.Stays` để lọc sơ bộ (`:58,76-84`). `data` là `DashboardData` vừa được `Reload()` lấy qua `HotelService.DashboardAsync()` → `RoomsAsync()` đọc `dbo.Rooms` và `ActiveStaysAsync()` đọc `dbo.Stays` (`GUI/ucDashboard.cs:110-118`; `BLL/HotelService.cs:14-20`; `DAL/HotelRepository.cs:94,98`). Người dùng nhìn thấy tên/số phòng từ `Room.Number`, loại/giá/cọc từ cùng hàng `Rooms`; chưa có câu SQL mới chỉ vì mở danh sách.
 
 | Trên form | GUI lấy từ đâu | Tham số truyền cho `HotelService.CreateStayAsync` tại `GUI/ucDashboard.Actions.cs:95-98` |
 | --- | --- | --- |
@@ -294,20 +300,68 @@ Một hàm có hậu tố `Async` trả kết quả sau khi SQL xong. Ví dụ `
 | Số cọc thực nhận | `amount.Value`; phòng có mức gợi ý từ `Room.Deposit` | `depositAmount` khi đặt trước; nhận ngay là 0 |
 | Hạn cuối nhận phòng | `receiveBy.Value` | `receiveBy` khi đặt trước; nhận ngay là `null` |
 
-Sau khi nhận tham số, `BLL/HotelService.cs:48-71` gọi `ValidateGuest` (`:27-34`), kiểm tra cách trả tiền (`:35-38`), thời lượng 1–60 ngày, giá trị cọc, trạng thái phòng và hạn giữ. BLL **lấy phòng mới nhất** bằng `RoomAsync(id)` (`DAL/HotelRepository.cs:95`), **lấy giờ SQL** bằng `NowAsync()` (`:76`) và **hỏi còn lịch trống không** bằng `EnsureAvailableAsync(roomId,from,until)` (`DAL/HotelTransaction.Management.cs:13-17`, `SELECT COUNT_BIG(*) FROM dbo.Stays`). Nếu có người vừa đặt trước đó, hành động bị từ chối dù form cũ vẫn từng hiển thị phòng trống.
+#### 10.3.1 Nguồn và ý nghĩa của các ô trên form đặt trước
+
+| Ô/người dùng thấy | Giá trị ban đầu hoặc lúc thay đổi lấy từ đâu? | Có được lưu ngay khi sửa ô không? |
+| --- | --- | --- |
+| **Chọn phòng** | [`ShowBooking:58`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L58) lấy `data.Rooms` (SQL `Rooms`) và bỏ phòng `BaoTri`. Khi đổi ngày đến/số ngày, `FilterRooms()` ở [`GUI:76–84`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L76) dùng `data.Stays` (SQL `Stays`) để ẩn phòng có lượt giao thời gian; phòng đang có khách vẫn có thể hiện nếu khoảng ngày tới không giao lượt cũ. Phòng được chọn mang `Room.Id`, `Version`, `Status`, `Deposit`. | Chưa. Đây là lọc trong RAM; lúc bấm lưu BLL đọc SQL mới nhất và kiểm tra lại lịch. |
+| **Họ tên, SĐT, CCCD/Hộ chiếu** | Người dùng nhập vào `name`, `phone`, `identity` ở [`GUI:62,86`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L62); form không tự điền từ `Customers`. | Chưa. Khi lưu, `ValidateGuest()` sửa khoảng trắng/chuẩn hóa giấy tờ và kiểm định dạng (`BLL/HotelService.cs:27–34`). |
+| **Ngày giờ dự kiến đến** và **số ngày thuê** | `arrival` khởi tạo từ `ServerNow.AddHours(2)`, `days` mặc định 1 và tối đa 60 ở [`GUI:63`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L63). `ServerNow` lấy từ `SELECT SYSDATETIME()` của SQL Server khi dashboard tải (`DAL/HotelRepository.cs:76`). Ngày trả được tính `arrival.AddDays(days)`. | Chưa. BLL kiểm ngày đến không ở quá khứ và số ngày 1–60; lúc lưu mới vào `Stays.Arrival/Departure`. |
+| **Đã thu tiền cọc / Số tiền thực thu** | `Room.Deposit` từ `Rooms.Deposit` chỉ là **số gợi ý**, được điền vào ô tiền khi chọn phòng ([`GUI:73–75`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L73)). Checkbox xác nhận đã thu thực tế. Nếu không chọn, BLL dùng cọc `0` dù ô còn hiển thị gợi ý; nếu chọn thì số thực thu phải lớn hơn 0. | Chưa. Khi lưu có cọc, `Stays.Deposit` giữ tổng cọc và `Payments` giữ **dòng thu tiền**. QR không xác nhận ngân hàng đã chuyển tiền. |
+| **Hạn cuối nhận phòng** | [`UpdateHold()`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L68) gợi ý tối đa 24 giờ từ `ServerNow` khi chưa cọc, 15 ngày khi đã có số cọc dương; nếu mốc ấy vượt ngày trả dự kiến, form gợi ý trước ngày trả một phút. Người dùng vẫn có thể chỉnh `receiveBy.Value`. | Chưa. BLL dùng **giờ SQL mới tại lúc bấm lưu**, yêu cầu `Arrival ≤ HoldUntil < Departure` và không vượt mốc 24 giờ/15 ngày từ lúc tạo. |
+| **Hình thức thu cọc / QR** | Danh sách “Tiền mặt”, “Chuyển khoản” là mảng cố định ở [`GUI:85`](../QLKhachSan/GUI/ucDashboard.Actions.cs#L85). [`PaymentQr.Add`](../QLKhachSan/GUI/PaymentQr.cs#L7) đọc tài khoản ngân hàng từ `appsettings.json`, hiển thị số tiền và nội dung có SĐT; ảnh QR lấy qua VietQR nếu có cấu hình. | Đổi lựa chọn/nhìn QR chưa lưu gì. Sau khi nhân viên xác nhận đã thu và bấm lưu, `Payments.Method` mới nhận phương thức. |
+
+**Lọc trên form không phải bảo đảm cuối cùng.** `FilterRooms()` chỉ xem bản `data.Stays` đang có trong RAM. Nếu máy khác vừa nhận hoặc đặt phòng, danh sách trên form có thể cũ. [`HotelService.CreateStayAsync`](../QLKhachSan/BLL/HotelService.cs#L48) chạy trong [`HotelRepository.RunAsync`](../QLKhachSan/DAL/HotelRepository.cs#L12), kiểm lại quyền phiên, `Rooms.Version/Status`, giờ SQL và lịch phòng trước khi ghi. [`EnsureAvailableAsync`](../QLKhachSan/DAL/HotelTransaction.Management.cs#L13) hỏi `Stays` có hàng `RoomId` đang hoạt động với `COALESCE(CheckIn,Arrival) < ngày trả mới` **và** `Departure > ngày đến mới` không. Đây là hai khoảng ngày giao nhau; hai lượt liền kề không giao nên có thể đặt.
+
+Sau khi nhận tham số, `BLL/HotelService.cs:48-71` gọi `ValidateGuest` (`:27-34`), kiểm tra phương thức (`:35-38`), thời lượng 1–60 ngày, tiền cọc nguyên đồng, trạng thái phòng và hạn giữ. `Write()` kiểm vai trò Admin/Reception và `RequireUserAsync()` đối chiếu phiên với `Users` (`BLL/HotelService.cs:12`; `DAL/HotelRepository.cs:77-80`). BLL **lấy phòng mới nhất** bằng `RoomAsync(id)` (`DAL/HotelRepository.cs:95`), **lấy giờ SQL** bằng `NowAsync()` (`:76`) và kiểm tra lịch bằng `EnsureAvailableAsync` (`DAL/HotelTransaction.Management.cs:13-17`). Nếu dữ liệu thay đổi hoặc điều kiện sai, không có lượt đặt được lưu nửa chừng.
 
 Khi mọi điều kiện đúng, `db.CreateStayAsync(...)` ghi `Customers` và `Stays` (`DAL/HotelTransaction.Commands.cs:7-11`). Nhận ngay còn đổi `Rooms.Status` sang `DangO` và thêm `StaySegments`; đặt trước giữ nguyên trạng thái vật lý phòng (`BLL/HotelService.cs:66-68`). Nếu cọc lớn hơn 0, `PaymentAsync` thêm `Payments.Kind='Deposit'`; số 0 không thêm dòng (`DAL/HotelTransaction.Commands.cs:27-28`). Cuối cùng ghi `AuditLog` rồi `Changed(...)` tải dashboard lại (`GUI/ucDashboard.cs:120-123`).
 
+#### 10.3.2 Sau khi bấm LƯU ĐẶT PHÒNG, cột nào vào bảng nào?
+
+| Bảng/giá trị | Lệnh và cột nhận dữ liệu | Mã liên kết để đọc lại |
+| --- | --- | --- |
+| `Customers` | [`HotelTransaction.CreateStayAsync:9`](../QLKhachSan/DAL/HotelTransaction.Commands.cs#L9) tìm `IdentityNumber` trùng: có thì `UPDATE Name,Phone`, chưa có thì `INSERT Name,Phone,IdentityNumber`. Vì vậy một người đặt nhiều lần vẫn dùng cùng hồ sơ theo giấy tờ. | `Customers.Id` được tìm bằng `IdentityNumber`, rồi ghi vào `Stays.CustomerId`. |
+| `Stays` | [`INSERT ... OUTPUT INSERTED.Id`](../QLKhachSan/DAL/HotelTransaction.Commands.cs#L10) lưu `RoomId`, `CustomerId`, bản chụp `GuestName/Phone/IdentityNumber`, `Status='Reserved'`, `IsActive=1`, `Created` bằng giờ SQL, `Arrival`, `Departure=Arrival+days`, `CheckIn=NULL`, `HoldUntil`, `Deposit`, `CreatedBy`. `OUTPUT` trả mã lượt mới về BLL. | `Stays.RoomId → Rooms.Id`; `Stays.CustomerId → Customers.Id`; `Stays.CreatedBy → Users.Id`. Mã lượt `Stays.Id` là chìa khóa cho cọc, dịch vụ và hóa đơn sau này. |
+| `Rooms` | [`SetRoomAsync`](../QLKhachSan/DAL/HotelTransaction.Commands.cs#L13) `UPDATE Rooms.Version=Version+1` và giữ `Status` hiện tại với đặt trước. | Phòng **không tự thành Đang ở** chỉ vì đã có lịch. `RoomId` nối lượt với phòng; `Version` báo form khác đã cũ. |
+| `Payments` và `AuditLog` | Nếu cọc >0, [`PaymentAsync`](../QLKhachSan/DAL/HotelTransaction.Commands.cs#L27) thêm `StayId`, `Kind='Deposit'`, `Amount`, `Created`, `Method`, `Note`, `CreatedBy`. Không cọc thì không thêm dòng `Payments`. [`AuditAsync`](../QLKhachSan/DAL/HotelRepository.cs#L92) thêm hành động `Reserve`. | `Payments.StayId → Stays.Id`; `Payments.CreatedBy`/`AuditLog.UserId → Users.Id`. Số `Stays.Deposit` là tổng đang giữ, còn `Payments` giải thích từng lần tiền vào. |
+| Chưa có `StaySegments`, `ServiceOrders`, `Invoices` | Đặt trước **chưa phải nhận phòng**, chưa ở thực tế, chưa gọi món và chưa checkout. | `StaySegments` chỉ xuất hiện lúc nhận phòng; `Invoices` xuất hiện sau khi hoàn tất checkout. |
+
+Tất cả lệnh trên nằm trong **một giao dịch** ở `HotelRepository.RunAsync` (`DAL/HotelRepository.cs:12-30`): nếu thêm `Payments` hoặc đổi `Rooms.Version` lỗi, thao tác rollback cả `Customers` và `Stays`. Sau khi commit, `Changed()` gọi `Reload()` → `DashboardAsync()` đọc lại `Rooms`/`Stays`. [`RenderBookings()`](../QLKhachSan/GUI/ucDashboard.cs#L198) chỉ lấy `Stays.Status='Reserved'`, sắp theo ngày đến; cột `Phòng` lấy `Stays.RoomId → Rooms.Id → Rooms.Number`, còn `Khách`, `SĐT`, `CCCD`, `Ngày đến`, `Hạn giữ`, `Cọc` lấy từ các cột của `Stays`. `Tình trạng` do GUI so `Stays.HoldUntil` với giờ SQL; dấu `*` ở ô phòng là số lượt Reserved của phòng đó ([`ucDashboard.cs:170`](../QLKhachSan/GUI/ucDashboard.cs#L170)).
+
+Lượt đặt không có hóa đơn ngay. Khi khách đến, nút **Nhận phòng** ở [`ucDashboard.cs:317–324`](../QLKhachSan/GUI/ucDashboard.cs#L317) gọi `CheckInAsync`: lúc ấy `Stays.Status` đổi thành `Occupied`, `Rooms.Status` thành `DangO`, và `StaySegments` bắt đầu ghi giờ/giá ở thực tế (`BLL/HotelService.cs:72-84`). Nếu `HoldUntil` qua giờ SQL mà chưa nhận, `ExpireReservationsAsync` hủy lượt, ghi `Payments.Forfeit` khi có cọc và `AuditLog.NoShow` (`BLL/HotelService.cs:99-111`). Hủy trước hạn thì có thể hoàn cọc theo [`CancelAsync`](../QLKhachSan/BLL/HotelService.cs#L85).
+
 **Ví dụ cụ thể:** chọn phòng 101, nhập khách An, 2 ngày và cọc 200.000đ. `Room` phòng 101 và `GuestInput("An", số điện thoại, giấy tờ)` đi vào `CreateStayAsync`. BLL kiểm tra lịch 2 ngày, DAL lưu một `Stays` mới và một `Payments` cọc 200.000đ. Khi tải lại, danh sách đặt có An và ô phòng 101 thêm dấu `*`; phòng vẫn có thể hiện “Trống” cho đến lúc nhận khách.
+
+<a id="sua-thong-tin-khach"></a>
+
+#### 10.3.3 Khách báo sai thông tin: sửa ở đâu?
+
+Sau khi đã bấm **LƯU ĐẶT PHÒNG**, không mở lại form tạo mới để nhập thêm một lượt. Trên dashboard, tìm **bảng đặt trước** phía dưới sơ đồ phòng, tìm đúng dòng theo phòng, tên hoặc SĐT, rồi bấm **Sửa thông tin khách** ngay trên dòng đó ([`RenderBookings`](../QLKhachSan/GUI/ucDashboard.cs#L198) tạo nút ở dòng 202). [`dgvDatCoc_CellContentClick`](../QLKhachSan/GUI/ucDashboard.cs#L317) lấy `BookingRow.Id` → tìm `Stay` có cùng `Stays.Id` trong `data.Stays` → gọi [`ShowEditBooking(stay)`](../QLKhachSan/GUI/ucDashboard.Management.cs#L43). Admin và Reception thấy nút; vai trò chỉ xem không có nút này.
+
+| Trong form **Sửa lịch đặt / thông tin khách** | Giá trị được điền ban đầu | Khi bấm **LƯU THAY ĐỔI** sẽ đi đâu? |
+| --- | --- | --- |
+| **Họ tên** | `stay.Guest` từ `Stays.GuestName` ở [`GUI:48`](../QLKhachSan/GUI/ucDashboard.Management.cs#L48). | `name.Text` đi vào `GuestInput.Name` → `ValidateGuest` → `Customers.Name` của hồ sơ theo giấy tờ đã nhập **và** `Stays.GuestName` của lượt đang sửa. |
+| **SĐT** | `stay.Phone` từ `Stays.Phone` ở cùng dòng 48. | `phone.Text` → `GuestInput.Phone` → `Customers.Phone` và `Stays.Phone`; không tự đổi SĐT của mọi lượt cũ khác. |
+| **CCCD / Hộ chiếu** | `stay.Identity` từ `Stays.IdentityNumber` ở cùng dòng 48. | `identity.Text` → `GuestInput.Identity` → tìm/tạo `Customers` theo `IdentityNumber`; `Stays.IdentityNumber` và `Stays.CustomerId` được cập nhật theo giấy tờ mới. |
+| **Phòng, ngày đến, số ngày, hạn cuối nhận** | `Stays.RoomId → Rooms.Id`, `Stays.Arrival`, `Stays.Departure−Arrival`, `Stays.HoldUntil` ở [`GUI:46–50`](../QLKhachSan/GUI/ucDashboard.Management.cs#L46). | Có thể **giữ nguyên** khi chỉ sửa khách. Nếu đổi lịch/phòng, BLL vẫn kiểm tra phòng và khoảng ngày không trùng trước khi cập nhật `Stays`. |
+| **Lý do thay đổi** | Ô trống; nhân viên tự ghi vì sao sửa, ví dụ “Khách cung cấp sai SĐT lúc đặt”. | [`Reason`](../QLKhachSan/BLL/HotelService.Management.cs#L12) yêu cầu 3–300 ký tự; nội dung được ghi vào `AuditLog.Detail` qua [`AuditAsync`](../QLKhachSan/DAL/HotelRepository.cs#L92). |
+| **Cọc đã thu** | Chỉ hiện trong dòng chú thích từ `Stays.Deposit` ([`GUI:52`](../QLKhachSan/GUI/ucDashboard.Management.cs#L52)). | Form sửa khách **không đổi cọc** và không thêm `Payments`; muốn thu thêm dùng **Thu cọc bổ sung**. |
+
+Đường lưu đầy đủ: nút ở [`GUI:53–56`](../QLKhachSan/GUI/ucDashboard.Management.cs#L53) → [`HotelService.UpdateBookingAsync`](../QLKhachSan/BLL/HotelService.Management.cs#L27) → [`HotelTransaction.UpdateBookingAsync`](../QLKhachSan/DAL/HotelTransaction.Management.cs#L38). BLL đọc lại `Stays` và `Rooms`, so `Version`, kiểm lượt còn `Reserved`, chưa quá `HoldUntil`, xác thực khách/lý do và lịch phòng. Nếu giờ đến dự kiến **đã qua nhưng hạn nhận chưa hết**, nhân viên vẫn sửa được họ tên/SĐT/giấy tờ khi **giữ nguyên** giờ đến cũ; nếu đổi giờ đến, phải chọn giờ chưa qua. DAL dòng 40 tìm hoặc thêm `Customers` theo giấy tờ mới; dòng 41 `UPDATE` đúng `Stays.Id` đang chọn, chép lại tên/SĐT/giấy tờ và đổi `CustomerId` tới hồ sơ vừa tìm. Cả thao tác nằm trong một transaction; thành công thì ghi `AuditLog` và dashboard đọc lại hàng đã sửa.
+
+**Ví dụ sửa sai CCCD:** lượt `Stays.Id=21` đang trỏ `Customers.Id=7` theo giấy tờ nhập nhầm. Nhân viên sửa CCCD trên **chính dòng đặt trước đó** và ghi lý do. Nếu giấy tờ đúng đã có trong `Customers`, `Stays.CustomerId` chuyển sang ID của hồ sơ ấy; nếu chưa có, SQL tạo hồ sơ mới rồi gán ID mới. `Stays.GuestName/Phone/IdentityNumber` cũng được sửa cho lượt 21. Hàng `Customers.Id=7` cũ **không bị xóa**; những lượt khác từng trỏ tới nó không tự đổi. Vì thế màn [Hồ sơ khách hàng](#13-giải-thích-cửa-sổ-hồ-sơ-khách-hàng-trong-ảnh) có thể còn một hồ sơ cũ không gắn lượt nào. Đây là điều cần giải thích khi người đọc hỏi “vì sao sau khi sửa giấy tờ lại thấy hai hồ sơ?”.
+
+**Giới hạn hiện tại:** nút này chỉ áp dụng cho lượt `Reserved` còn hạn nhận. Sau khi đã nhận phòng (`Occupied`), hủy hoặc thanh toán, `UpdateBookingAsync` từ chối; màn **Hồ sơ khách hàng** chỉ tra cứu, không có nút sửa trực tiếp. Đừng tạo lượt mới chỉ để sửa thông tin của một lượt đang chờ nhận.
 
 ### 10.4 Nhận lượt đã đặt, sửa, hủy và thu cọc
 
 | Việc người dùng làm | Dữ liệu GUI lấy và truyền vào BLL | BLL đọc/kiểm tra | DAL ghi và kết quả |
 | --- | --- | --- | --- |
 | **Nhận phòng** ở bảng đặt/lịch | Dòng đã chọn có `BookingRow.Id` hoặc `ScheduleRow.Id`; GUI tìm `Stay` tương ứng trong `data.Stays`, gọi `CheckInAsync(stay)` (`GUI/ucDashboard.cs:317-324,236-249`). | `BLL/HotelService.cs:72-84` đọc lại `Stays`, `Rooms`, giờ SQL và lịch `Stays`; kiểm tra lượt còn Reserved, chưa quá hạn, phòng `Trong`, không trùng lịch. | `DAL/HotelTransaction.Commands.cs:20` sửa `Stays` sang Occupied, `:18` thêm `StaySegments`, `:13` sửa `Rooms` sang Đang ở; tải lại để bảng/lịch thay đổi. |
-| **Sửa lịch / khách** | `ShowEditBooking(stay)` điền form từ `Stay` cũ; `GUI/ucDashboard.Management.cs:46-56` truyền `stay`, `target` từ phòng được chọn, `GuestInput` từ ba ô, `arrival`, `days`, `receiveBy`, `reason` vào `UpdateBookingAsync`. | `BLL/HotelService.Management.cs:27-40` đọc `Stays`, `Rooms`, giờ SQL; kiểm tra quyền, hạn, lý do 3–300 ký tự, phòng phù hợp và lịch trống. | `DAL/HotelTransaction.Management.cs:38-41` cập nhật `Customers` theo giấy tờ và `Stays` theo dữ liệu mới; `Rooms.Version` tăng ở phòng mới và phòng cũ nếu chuyển (`BLL/HotelService.Management.cs:38-39`); `AuditLog` lưu lý do; tải lại form/bảng. |
+| **Sửa thông tin khách** | `ShowEditBooking(stay)` điền form từ `Stay` cũ; `GUI/ucDashboard.Management.cs:46-56` truyền `stay`, `target` từ phòng được chọn, `GuestInput` từ ba ô, `arrival`, `days`, `receiveBy`, `reason` vào `UpdateBookingAsync`. | `BLL/HotelService.Management.cs:27-40` đọc `Stays`, `Rooms`, giờ SQL; kiểm tra quyền, hạn, lý do 3–300 ký tự, phòng phù hợp và lịch trống. | `DAL/HotelTransaction.Management.cs:38-41` cập nhật `Customers` theo giấy tờ và `Stays` theo dữ liệu mới; `Rooms.Version` tăng ở phòng mới và phòng cũ nếu chuyển (`BLL/HotelService.Management.cs:38-39`); `AuditLog` lưu lý do; tải lại form/bảng. |
 | **Hủy đặt** | `ShowCancel(stay)` trước tiên gọi `RefundQuoteAsync(stay)` để lấy tiền được hoàn từ `Stays.Deposit` và giờ SQL (`GUI/ucDashboard.Actions.cs:102-109`; `BLL/HotelService.Management.cs:19-23`). Sau xác nhận, truyền `stay`, `method.SelectedItem`, `expectedRefund` vào `CancelAsync`. | `BLL/HotelService.cs:85-98` đọc lại `Stays` và giờ SQL. Nếu số tiền hoàn đã đổi vì vừa quá hạn, không dùng bảng tính cũ. | `DAL/HotelTransaction.Commands.cs:23` đóng lượt Cancelled; `:27` ghi Refund trước hạn hoặc Forfeit sau hạn (nếu số tiền >0), ghi `AuditLog`; tải lại, lịch đặt biến mất khỏi danh sách hoạt động. |
-| **Thu cọc bổ sung** | Combo `choice` lấy các `Reserved` từ `data.Stays` (`GUI/ucDashboard.Management.cs:15`); GUI truyền `selected.Stay`, `amount.Value`, `method.SelectedItem` (`:36-40`) vào `AddDepositAsync`. | `BLL/HotelService.Management.cs:50-62` đọc lại `Stays`, giờ SQL; kiểm tra số tiền >0, chưa quá hạn. Lần cọc đầu đổi hạn giữ tối đa thành 15 ngày tính từ lúc tạo. | `DAL/HotelTransaction.Management.cs:37` tăng `Stays.Deposit`, `DAL/HotelTransaction.Commands.cs:27` thêm `Payments.Deposit`; tải lại số cọc trên dashboard. |
+| **Thu cọc bổ sung** | Combo `choice` lấy các `Reserved` từ `data.Stays` (`GUI/ucDashboard.Management.cs:15`); GUI truyền `selected.Stay`, `amount.Value`, `method.SelectedItem` (`:36-40`) vào `AddDepositAsync`. | `BLL/HotelService.Management.cs:50-62` đọc lại `Stays`, giờ SQL; kiểm tra số tiền >0, chưa quá hạn. Cọc lần đầu mở giới hạn tối đa đến 15 ngày từ lúc tạo, nhưng `HoldUntil` được chặn trước `Stays.Departure`; nếu đã có cọc thì giữ nguyên hạn. | `DAL/HotelTransaction.Management.cs:37` tăng `Stays.Deposit`, `DAL/HotelTransaction.Commands.cs:27` thêm `Payments.Deposit`; tải lại số cọc trên dashboard. |
 
 **Điểm dễ nhầm:** trên form sửa lịch, cọc đã thu chỉ hiện để đọc; hàm `UpdateBookingAsync` không nhận tham số cọc. Muốn thu thêm phải vào **Thu cọc bổ sung**. Và nút **Nhận phòng** chỉ truyền `Stay` đã chọn, không lấy lại thông tin khách từ ô nhập; thông tin ấy đã được lưu khi đặt.
 
@@ -461,7 +515,7 @@ Ký hiệu `──<` nghĩa là “một bản ghi bên trái có thể nối t�
 
 1. Khách chưa tự tạo hồ sơ trong màn hình này. Khi lễ tân **Đặt trước** hoặc **Nhận phòng ngay**, GUI gom tên, SĐT và CCCD/hộ chiếu thành `GuestInput` (`GUI/ucDashboard.Actions.cs:62,95-98`). BLL kiểm tra định dạng tại `BLL/HotelService.cs:27-34,48-71`.
 2. `DAL/HotelTransaction.Commands.cs:9` tìm `Customers` bằng `IdentityNumber`. Có rồi thì cập nhật `Name`, `Phone`; chưa có thì `INSERT Customers`. `Customers.IdentityNumber` là duy nhất (`Database/Setup.sql:32-34`), nên cùng giấy tờ chỉ có một hồ sơ khách.
-3. Ngay sau đó `DAL/HotelTransaction.Commands.cs:10-11` `INSERT Stays`. `Stays.CustomerId` lấy `Customers.Id` vừa tìm; đồng thời `Stays.GuestName`, `Phone`, `IdentityNumber` giữ **thông tin của lượt tại lúc tạo** (`Database/Setup.sql:35-44`). Form **Sửa lịch / khách** có thể chủ động sửa thông tin của lượt Reserved này (`DAL/HotelTransaction.Management.cs:38-41`); thay đổi hồ sơ khách sau đó không tự viết lại mọi lượt ở cũ.
+3. Ngay sau đó `DAL/HotelTransaction.Commands.cs:10-11` `INSERT Stays`. `Stays.CustomerId` lấy `Customers.Id` vừa tìm; đồng thời `Stays.GuestName`, `Phone`, `IdentityNumber` giữ **thông tin của lượt tại lúc tạo** (`Database/Setup.sql:35-44`). Form **Sửa thông tin khách** có thể chủ động sửa thông tin của lượt Reserved này (`DAL/HotelTransaction.Management.cs:38-41`); thay đổi hồ sơ khách sau đó không tự viết lại mọi lượt ở cũ.
 4. Nếu khách gọi món, `DAL/HotelTransaction.Commands.cs:25` `INSERT ServiceOrders` với `StayId` là mã lượt ở và `ServiceId` là mã món trong `Services`. `Category`, `Name`, `Price` cũng được chụp vào dòng gọi món, nên sau này thay giá danh mục không làm thay đổi dòng cũ (`Database/Setup.sql:53-60`).
 5. Khi checkout, `DAL/HotelTransaction.Commands.cs:29` `INSERT Invoices` với `StayId` là lượt vừa chốt. Hóa đơn lưu riêng `RoomNumber`, `GuestName`, tiền phòng, tiền dịch vụ, cọc, thu thêm và hoàn tiền tại thời điểm chốt (`Database/Setup.sql:63-69`). Tiền thực thu/hoàn từng lần còn được ghi ở `Payments` (`DAL/HotelTransaction.Commands.cs:27-28`).
 
@@ -535,7 +589,7 @@ Nếu tab dịch vụ trống như trong ảnh, nghĩa là truy vấn `CustomerO
 ### 13.4 Tại sao có dữ liệu ở ba nơi giống nhau?
 
 - `Customers.Name/Phone/IdentityNumber`: hồ sơ **hiện tại**, dùng tìm khách và tránh tạo trùng theo giấy tờ.
-- `Stays.GuestName/Phone/IdentityNumber`: **thông tin của một lần đặt/ở**, được ghi lúc tạo và có thể được sửa bằng form **Sửa lịch / khách** khi lượt còn Reserved. Một khách đổi SĐT sau này không tự làm mọi lượt cũ đổi theo.
+- `Stays.GuestName/Phone/IdentityNumber`: **thông tin của một lần đặt/ở**, được ghi lúc tạo và có thể được sửa bằng form **Sửa thông tin khách** khi lượt còn Reserved. Một khách đổi SĐT sau này không tự làm mọi lượt cũ đổi theo.
 - `Invoices.GuestName/RoomNumber`: **bản chụp khi phát hành hóa đơn**. Sau này đổi tên hồ sơ hoặc số phòng trong danh mục không nên làm phiếu cũ “đổi theo”.
 - `ServiceOrders.Name/Price`: **bản chụp món và giá lúc gọi**. `Services.Name/Price` là danh mục hiện tại; quản lý sửa danh mục không làm dòng đã gọi thay đổi.
 
@@ -659,12 +713,17 @@ Mỗi tệp dưới đây có lời giải thích trong chương được chỉ 
 | [`BLL/HotelService.Management.cs`](../QLKhachSan/BLL/HotelService.Management.cs) | Cọc, sửa đặt, dịch vụ, danh mục, báo cáo | [Nghiệp vụ](#phan-17) |
 | [`BLL/BillingPolicy.cs`](../QLKhachSan/BLL/BillingPolicy.cs) | Thuật toán tính tiền phòng | [Nghiệp vụ](#phan-17) |
 | [`DAL/DatabaseHelper.cs`](../QLKhachSan/DAL/DatabaseHelper.cs) | Đọc cấu hình và chuỗi kết nối | [SQL và cấu hình](#phan-18) |
-| [`DAL/SchemaMigrator.cs`](../QLKhachSan/DAL/SchemaMigrator.cs) | Tự nâng schema đến V5 khi mở app | [SQL và cấu hình](#phan-18) |
+| [`DAL/SchemaMigrator.cs`](../QLKhachSan/DAL/SchemaMigrator.cs) | Tự nâng schema đến V6 khi mở app; báo lỗi migration có vị trí SQL | [SQL và cấu hình](#phan-18) |
+| [`DTO/FinanceModels.cs`](../QLKhachSan/DTO/FinanceModels.cs) | Ca, phiếu, công nợ, kho, chỉ số tài chính | [Tài chính V6](#20-phân-hệ-tài-chính---kế-toán-v6) |
+| [`BLL/HotelService.Finance.cs`](../QLKhachSan/BLL/HotelService.Finance.cs) | Quyền và quy tắc nghiệp vụ kế toán | [Tài chính V6](#20-phân-hệ-tài-chính---kế-toán-v6) |
+| [`DAL/HotelTransaction.Finance.cs`](../QLKhachSan/DAL/HotelTransaction.Finance.cs) | SQL sổ quỹ, ca, công nợ, kho, hóa đơn và báo cáo | [Tài chính V6](#20-phân-hệ-tài-chính---kế-toán-v6) |
 | [`DAL/HotelRepository.cs`](../QLKhachSan/DAL/HotelRepository.cs) | Giao dịch, tham số SQL, đọc dữ liệu chính và tài khoản | [SQL và cấu hình](#phan-18) |
 | [`DAL/HotelTransaction.Commands.cs`](../QLKhachSan/DAL/HotelTransaction.Commands.cs) | Các lệnh ghi phòng, lượt ở, món, hóa đơn, thanh toán | [SQL và cấu hình](#phan-18) |
 | [`DAL/HotelTransaction.Management.cs`](../QLKhachSan/DAL/HotelTransaction.Management.cs) | Lịch, báo cáo, danh mục, nhân viên, nhật ký | [SQL và cấu hình](#phan-18) |
 | [`Database/Setup.sql`](../Database/Setup.sql) | Tạo database schema V1, phòng và món mẫu | [SQL và cấu hình](#phan-18) |
-| [`Database/MigrateV2.sql`](../Database/MigrateV2.sql), [`V3`](../Database/MigrateV3.sql), [`V4`](../Database/MigrateV4.sql), [`V5`](../Database/MigrateV5.sql) | Nâng cấu trúc lên bản đang dùng | [SQL và cấu hình](#phan-18) |
+| [`Database/MigrateV2.sql`](../Database/MigrateV2.sql), [`V3`](../Database/MigrateV3.sql), [`V4`](../Database/MigrateV4.sql), [`V5`](../Database/MigrateV5.sql), [`V6`](../Database/MigrateV6.sql) | Nâng cấu trúc lên bản đang dùng | [SQL và cấu hình](#phan-18) |
+| [`GUI/AccountingForm.cs`](../QLKhachSan/GUI/AccountingForm.cs) | Các tab kế toán, nút thao tác và bản xem trước khi in | [Tài chính V6](#20-phân-hệ-tài-chính---kế-toán-v6) |
+| [`GUI/ExcelExport.cs`](../QLKhachSan/GUI/ExcelExport.cs) | Xuất lưới `.xlsx` | [Tài chính V6](#20-phân-hệ-tài-chính---kế-toán-v6) |
 | [`GUI/FormLogin.cs`](../QLKhachSan/GUI/FormLogin.cs) và [`FormLogin.Designer.cs`](../QLKhachSan/GUI/FormLogin.Designer.cs) | Logic login và chỗ tạo/nối điều khiển | [Giao diện](#phan-16) |
 | [`GUI/FormMain.cs`](../QLKhachSan/GUI/FormMain.cs) và [`FormMain.Designer.cs`](../QLKhachSan/GUI/FormMain.Designer.cs) | Cửa sổ chính chứa dashboard | [Giao diện](#phan-16) |
 | [`GUI/ucDashboard.cs`](../QLKhachSan/GUI/ucDashboard.cs) và [`ucDashboard.Designer.cs`](../QLKhachSan/GUI/ucDashboard.Designer.cs) | Nạp dữ liệu, vẽ sơ đồ và các điều khiển nền | [Giao diện](#phan-16) |
@@ -1062,3 +1121,21 @@ Một câu mô tả để người chưa biết lập trình cũng hiểu:
 ```
 
 Sau khi viết, tìm tên hàm bằng `rg -n 'TenHam' QLKhachSan` để đối chiếu với mã thật. Đó cũng là cách cập nhật tài liệu khi dự án thay đổi: sửa mô tả luồng và số dòng cùng lúc với sửa code.
+
+## 20. Phân hệ Tài chính - Kế toán V6
+
+Nút **Tài chính / Bàn giao ca** mở [`AccountingForm`](../QLKhachSan/GUI/AccountingForm.cs). Màn hình chọn khoảng **Từ/Đến** (tối đa 367 ngày), tải các tab từ `HotelService.Finance` và có nút **Làm mới**, **Xuất Excel**. Lễ tân chỉ thấy **Ca trực** của mình; Admin, Kế toán và Quản lý thấy thêm **Sổ quỹ**, **Đối soát ngân hàng**, **Công nợ**, **Kho minibar**, **Hóa đơn**, **Nhóm bill**, **Lãi lỗ**. BLL kiểm tra quyền trước khi gọi SQL; nút trên giao diện không phải kiểm soát quyền duy nhất.
+
+| Thao tác trên `AccountingForm` | BLL và điều kiện chính | DAL và bảng ghi/đọc |
+| --- | --- | --- |
+| **Mở ca → Bàn giao ca → Khóa ca** | `OpenCashShiftAsync`, `SubmitCashShiftAsync`, `LockCashShiftAsync`; đối chiếu tiền lý thuyết với tiền thực đếm, yêu cầu giải trình khi lệch | `CashShifts`, `Payments.ShiftId`, `ServiceOrders.ShiftId`, `FinanceVouchers.ShiftId`; trigger khóa ca trong `MigrateV6.sql` |
+| **Khóa kỳ tháng** | `LockAccountingPeriodAsync`; yêu cầu các ca liên quan đã khóa | `AccountingPeriods` và trigger chặn ghi vào kỳ cũ |
+| **Nhập số dư mở sổ / Lập phiếu thu chi** | `SetOpeningBalanceAsync`, `PostVoucherAsync`; tiền mặt cần ca mở | `FinanceOpeningBalances`, `FinanceVouchers`, `Payments`; `BookAsync` tính đầu kỳ + thu − chi = cuối kỳ |
+| **Nhập sao kê / Đối chiếu lại** | `ImportBankStatementsAsync`, `ReconcilePendingBankAsync`; khớp kênh, mã, số tiền | `BankStatementLines`, `Payments`, `FinanceVouchers` |
+| **Ghi công nợ / Gạch nợ theo phiếu** | `CreateDebtAsync`, `AllocateDebtAsync`; không phân bổ vượt nợ hoặc phần phiếu chưa dùng | `FinanceDebts`, `DebtAllocations`, `FinanceVouchers`; danh sách tính tuổi nợ |
+| **Thêm mặt hàng / Nhập xuất kho / Buồng phòng báo dùng** | `AddStockItemAsync`, `MoveStockAsync`, `ReportHousekeepingAsync`; xuất bán chốt giá vốn | `StockItems`, `StockMovements`, `HousekeepingConsumption`, `ServiceOrders` |
+| **Giảm trừ / Hủy hóa đơn / Đánh dấu e-Invoice** | `AddInvoiceAdjustmentAsync`, `VoidInvoiceAsync`, `MarkEInvoiceAsync`; ghi lý do, người duyệt hoặc số hóa đơn điện tử | `InvoiceAdjustments`, `InvoiceVoids`, `InvoiceFinance`, `Invoices` |
+| **Tách / gộp nhóm bill** | `GroupBillsAsync`; phân bổ đủ giá trị hóa đơn | `BillGroups`, `BillShares`; đây là phân bổ nội bộ |
+| **Xem chỉ số / Lãi lỗ** | `FinanceSummaryAsync`; ADR, RevPAR, lấp đầy và lợi nhuận sơ bộ | Tổng hợp từ hóa đơn, dịch vụ, kho và phiếu chi; xem giới hạn trong [tài liệu kế toán](ACCOUNTING_FINANCE.md#chỉ-số-và-giới-hạn-báo-cáo) |
+
+Các hàm SQL tương ứng nằm trong [`HotelTransaction.Finance.cs`](../QLKhachSan/DAL/HotelTransaction.Finance.cs), các kiểu dữ liệu nằm trong [`FinanceModels.cs`](../QLKhachSan/DTO/FinanceModels.cs). Bản in phiếu thu/chi, biên bản ca và công nợ được mở qua `PrintPreviewDialog` trong `AccountingForm`; lưới được xuất `.xlsx` bằng [`ExcelExport.cs`](../QLKhachSan/GUI/ExcelExport.cs). Hóa đơn điện tử chỉ được **ghi nhận số đã phát hành**, ứng dụng không tự phát hành; VAT/phí phục vụ/đơn vị làm tròn hiện là dữ liệu đối chiếu, không tự cộng vào bill gốc. Báo cáo lấp đầy quá khứ chưa có lịch sử phòng khả dụng theo từng đêm.

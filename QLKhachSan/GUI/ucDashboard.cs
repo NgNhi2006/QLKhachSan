@@ -32,6 +32,8 @@ public partial class ucDashboard : UserControl
         this.user=user;
         var repository=new HotelRepository();service=new HotelService(repository,user);auth=new AuthService(repository);
         InitializeComponent();
+        ExcelExport.Attach(dgvDatCoc,"Đặt cọc và giữ chỗ");
+        ExcelExport.Attach(dgvLichTrinh,"Lịch đến và đi");
         pnlLeftTools.AutoScroll=true;
         lblClock.Text=DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
         components??=new Container(); components.Add(clock);components.Add(refreshTimer);
@@ -84,6 +86,10 @@ public partial class ucDashboard : UserControl
             AddTool("Danh mục dịch vụ",915,ShowServiceCatalog);
             AddTool("Bảng giá",960,ShowPricing);
         }
+        AddTool("Tài chính / Bàn giao ca",user.Role=="Admin"?1005:user.Role=="Manager"?825:735,()=>
+        {
+            using var form=new AccountingForm(user);form.ShowDialog(this);return Task.CompletedTask;
+        });
         dgvDatCoc.AutoGenerateColumns=true;dgvLichTrinh.AutoGenerateColumns=true;
         ConfigureScheduleView();
         ApplyAppearance();
@@ -199,7 +205,7 @@ public partial class ucDashboard : UserControl
     {
         dgvDatCoc.DataSource=data.Stays.Where(s=>s.Status==StayStatus.Reserved).OrderBy(s=>s.Arrival).Select(s=>new BookingRow(s.Id,StayRoom(s)?.Number??"?",s.Guest,s.Phone,s.Identity,s.Arrival,s.HoldUntil,s.Deposit,s.HoldUntil<=ServerNow?"QUÁ HẠN — KHÔNG HOÀN CỌC":"Chờ nhận")).ToList();
         if(dgvDatCoc.Columns["Id"] is { } idColumn)idColumn.Visible=false;
-        if(RolePolicy.CanOperate(user.Role)){AddAction(dgvDatCoc,"checkin","Nhận phòng");AddAction(dgvDatCoc,"edit","Sửa lịch / khách");AddAction(dgvDatCoc,"cancel","Hủy / xử lý cọc");}
+        if(RolePolicy.CanOperate(user.Role)){AddAction(dgvDatCoc,"checkin","Nhận phòng");AddAction(dgvDatCoc,"edit","Sửa thông tin khách");AddAction(dgvDatCoc,"cancel","Hủy / xử lý cọc");}
         dgvDatCoc.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.AllCells;
         if(dgvDatCoc.Columns["NgàyĐến"] is { } arrival){arrival.HeaderText="Ngày đến";arrival.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
         if(dgvDatCoc.Columns["HạnGiữ"] is { } hold){hold.HeaderText="Hạn giữ";hold.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}

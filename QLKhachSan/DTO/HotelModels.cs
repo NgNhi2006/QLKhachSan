@@ -43,7 +43,7 @@ public sealed record DashboardData(List<Room> Rooms, List<Stay> Stays, List<Serv
 public sealed record PaymentEntry(long Id, long StayId, string Guest, string Kind, decimal Amount, DateTime Created, string Method, string Note, string Username)
 {
     // Forfeit recognizes a previously received deposit; it is not another cash receipt.
-    public decimal CashFlow => Kind == "Refund" ? -Amount : Kind == "Forfeit" ? 0 : Amount;
+    public decimal CashFlow => Method == "Công nợ OTA" || Kind == "Forfeit" ? 0 : Kind == "Refund" ? -Amount : Amount;
 }
 public sealed record PeriodReport(List<Invoice> Invoices, List<RevenueItem> Revenue, List<PaymentEntry> Payments);
 public sealed record UserInfo(int Id, string Username, string Role, bool Active, DateTime? LockedUntil, long Version);

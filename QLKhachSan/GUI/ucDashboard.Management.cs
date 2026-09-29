@@ -14,7 +14,7 @@ public partial class ucDashboard
         using var dialog=new InputDialog("Thu cọc bổ sung",760,Math.Min(660,Screen.FromControl(this).WorkingArea.Height-30));
         var choice=Ui.Combo(data.Stays.Where(s=>s.Status==StayStatus.Reserved).Select(s=>new StayChoice(s,$"#{s.Id} • P.{StayRoom(s)?.Number} • {s.Guest} • Đã cọc {s.Deposit:N0} đ")));
         if(choice.Items.Count==0)throw new BusinessException("Không có lượt đặt trước chờ nhận phòng để thu cọc.");
-        var amount=Ui.Money();var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản"});
+        var amount=Ui.Money();var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS"});var reference=Ui.Text(100);
         var summary=new Label {AutoSize=true,MinimumSize=new Size(0,56),MaximumSize=new Size(680,0),BackColor=AppTheme.Canvas,ForeColor=AppTheme.Ink,Padding=new Padding(12,8,8,6)};
         void UpdateSummary()
         {
@@ -23,7 +23,7 @@ public partial class ucDashboard
         }
         choice.SelectedIndexChanged+=(_,_)=>UpdateSummary();amount.ValueChanged+=(_,_)=>UpdateSummary();
         var confirm=new CheckBox {Text="Tôi xác nhận đã nhận đủ số tiền bổ sung",AutoSize=true};
-        dialog.Add("Lượt đặt trước chưa nhận phòng",choice);dialog.Add("Thu thêm (đồng)",amount);dialog.Add("Hình thức",method);
+        dialog.Add("Lượt đặt trước chưa nhận phòng",choice);dialog.Add("Thu thêm (đồng)",amount);dialog.Add("Hình thức",method);dialog.Add("Mã giao dịch QR/POS",reference);
         dialog.Add("THÔNG TIN THU CỌC",summary);
         PaymentQr.Add(dialog,method,()=>amount.Value,()=>choice.SelectedItem is StayChoice item?$"COC-{item.Stay.Id}":"COC",amount,null,choice,transfer=>
         {
@@ -36,7 +36,7 @@ public partial class ucDashboard
         dialog.Action("GHI NHẬN THU",async()=>
         {
             if(!confirm.Checked)throw new BusinessException("Cần xác nhận đã nhận tiền.");
-            if(choice.SelectedItem is StayChoice selected)await Changed(()=>service.AddDepositAsync(selected.Stay,amount.Value,(string)method.SelectedItem!));
+            if(choice.SelectedItem is StayChoice selected)await Changed(()=>service.AddDepositAsync(selected.Stay,amount.Value,(string)method.SelectedItem!,reference.Text));
         });
         UpdateSummary();dialog.ShowDialog(this);return Task.CompletedTask;
     }

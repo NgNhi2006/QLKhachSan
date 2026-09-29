@@ -22,9 +22,21 @@ public sealed partial class HotelTransaction
     public Task<int> ExtendAsync(Stay stay, DateTime departure) => Execute("UPDATE dbo.Stays SET Departure=@p1,Version=Version+1 WHERE Id=@p0",stay.Id,departure);
     public Task<int> CloseStayAsync(Stay stay, bool paid, DateTime now) => Execute("UPDATE dbo.Stays SET Status=@p1,IsActive=0,CheckOut=@p2,Version=Version+1 WHERE Id=@p0",stay.Id,paid?"Paid":"Cancelled",now);
     public Task<int> TouchStayAsync(long id) => Execute("UPDATE dbo.Stays SET Version=Version+1 WHERE Id=@p0",id);
-    public Task<int> AddOrderAsync(long stay, ServiceItem item, int quantity, DateTime now, UserSession user) => Execute("INSERT dbo.ServiceOrders(StayId,ServiceId,Category,Name,Quantity,Price,Ordered,CreatedBy) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7)",stay,item.Id,item.Category,item.Name,quantity,item.Price,now,user.Id);
+    public async Task<int> AddOrderAsync(long stay, ServiceItem item, int quantity, DateTime now, UserSession user)
+    {
+        var shift=await RequireOpenShiftAsync(user.Id);
+        return await Execute("INSERT dbo.ServiceOrders(StayId,ServiceId,Category,Name,Quantity,Price,Ordered,CreatedBy,ShiftId) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8)",stay,item.Id,item.Category,item.Name,quantity,item.Price,now,user.Id,shift);
+    }
     public Task<int> DeliverAsync(long stay, DateTime now) => Execute("UPDATE dbo.ServiceOrders SET Delivered=@p1,DeliveredQuantity=Quantity WHERE StayId=@p0 AND Delivered IS NULL AND Cancelled IS NULL",stay,now);
-    public Task<int> PaymentAsync(long stay,string kind,decimal amount,DateTime now,string method,string note,UserSession user)
-        => amount==0?Task.FromResult(0):Execute("INSERT dbo.Payments(StayId,Kind,Amount,Created,Method,Note,CreatedBy) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6)",stay,kind,amount,now,method,note,user.Id);
+    public async Task<int> PaymentAsync(long stay,string kind,decimal amount,DateTime now,string method,string note,UserSession user,string? reference=null)
+    {
+        if(amount==0)return 0;
+        long? shift=kind=="Forfeit"?null:await RequireOpenShiftAsync(user.Id);
+        reference=string.IsNullOrWhiteSpace(reference)?null:reference.Trim();
+        if((method is "Chuyển khoản" or "Thẻ POS" or "Công nợ OTA") && reference is null && (kind is "Deposit" or "Checkout"))
+            throw new BusinessException("Giao dịch QR/POS cần mã giao dịch hoặc mã chuẩn chi.");
+        if(reference is {Length:>100})throw new BusinessException("Mã giao dịch quá dài.");
+        return await Execute("INSERT dbo.Payments(StayId,Kind,Amount,Created,Method,Note,CreatedBy,ShiftId,ExternalReference) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8)",stay,kind,amount,now,method,note,user.Id,shift,reference);
+    }
     public Task<long> InvoiceAsync(BillQuote bill,string method,UserSession user,DateTime issued) => Scalar("INSERT dbo.Invoices(StayId,RoomNumber,GuestName,Issued,RoomCharge,ServiceCharge,Deposit,Collected,Refunded,Method,CreatedBy) OUTPUT INSERTED.Id VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10)",bill.Stay.Id,bill.Room.Number,bill.Stay.Guest,issued,bill.RoomCharge,bill.Services,bill.Stay.Deposit,bill.ToCollect,bill.ToRefund,method,user.Id);
 }

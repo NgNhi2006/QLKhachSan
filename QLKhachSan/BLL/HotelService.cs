@@ -34,7 +34,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
     }
     private static void Method(string method)
     {
-        if(method is not ("Tiền mặt" or "Chuyển khoản")) throw new BusinessException("Phương thức thanh toán không hợp lệ.");
+        if(method is not ("Tiền mặt" or "Chuyển khoản" or "Thẻ POS" or "Công nợ OTA")) throw new BusinessException("Phương thức thanh toán không hợp lệ.");
     }
     private static void RoomUnchanged(Room actual,Room expected,RoomStatus required)
     {
@@ -45,9 +45,10 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         if(actual.Version!=expected.Version || actual.Status!=required) throw new BusinessException("Lượt lưu trú đã thay đổi. Vui lòng làm mới.");
     }
     public static DateTime ReservationHoldLimit(DateTime created,bool hasDeposit) => created.AddDays(hasDeposit?15:1);
-    public Task<long> CreateStayAsync(Room selected,GuestInput guest,bool reserve,DateTime arrival,int days,bool takeDeposit,string method,decimal? depositAmount=null,DateTime? receiveBy=null)
+    public Task<long> CreateStayAsync(Room selected,GuestInput guest,bool reserve,DateTime arrival,int days,bool takeDeposit,string method,decimal? depositAmount=null,DateTime? receiveBy=null,string? reference=null)
     {
         guest=ValidateGuest(guest); Method(method);
+        if(reserve && takeDeposit && method=="Công nợ OTA")throw new BusinessException("Tiền cọc phải thực thu, không thể ghi nhận bằng công nợ OTA.");
         if(!reserve && (takeDeposit || depositAmount.GetValueOrDefault()!=0)) throw new BusinessException("Nhận phòng trực tiếp không thu cọc. Tiền cọc chỉ áp dụng cho đặt phòng trước.");
         if(days is <1 or >60) throw new BusinessException("Số ngày thuê phải từ 1 đến 60.");
         return Write(async db=>
@@ -56,15 +57,15 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
             if(room.Status==RoomStatus.BaoTri || (!reserve && room.Status!=RoomStatus.Trong)) throw new BusinessException("Phòng chưa sẵn sàng nhận khách.");
             var now=await db.NowAsync();
             var deposit=takeDeposit?(depositAmount ?? room.Deposit):0;
-            ValidateMoney(deposit);
+            ValidateMoney(deposit); if(takeDeposit && deposit==0) throw new BusinessException("Đã chọn thu cọc thì số tiền thực thu phải lớn hơn 0.");
             if(!reserve) arrival=now;
             DateTime? hold=reserve?(receiveBy ?? ReservationHoldLimit(now,deposit>0)):null;
-            if(reserve && (arrival<now || arrival>=ReservationHoldLimit(now,deposit>0) || hold<arrival || hold>ReservationHoldLimit(now,deposit>0))) throw new BusinessException("Ngày đến và hạn nhận phải nằm trong thời gian giữ chỗ: tối đa 1 ngày khi chưa cọc, 15 ngày khi đã cọc, tính từ lúc đặt phòng.");
+            if(reserve && (arrival<now || arrival>=ReservationHoldLimit(now,deposit>0) || hold<arrival || hold>=arrival.AddDays(days) || hold>ReservationHoldLimit(now,deposit>0))) throw new BusinessException("Ngày đến và hạn nhận phải nằm trong thời gian giữ chỗ: hạn nhận phải trước ngày trả, tối đa 1 ngày khi chưa cọc hoặc 15 ngày khi đã cọc tính từ lúc đặt phòng.");
             await db.EnsureAvailableAsync(room.Id,arrival,arrival.AddDays(days));
             var id=await db.CreateStayAsync(room,guest,reserve,now,arrival,arrival.AddDays(days),deposit,hold,user);
             await db.SetRoomAsync(room,reserve?room.Status:RoomStatus.DangO);
             if(!reserve) await db.StartSegmentAsync(id,room,now);
-            await db.PaymentAsync(id,"Deposit",deposit,now,method,"Thu cọc",user);
+            await db.PaymentAsync(id,"Deposit",deposit,now,method,"Thu cọc",user,reference);
             await db.AuditAsync(user,reserve?"Reserve":"CheckIn",$"Lượt {id}; phòng {room.Number}");
             return id;
         });
@@ -82,7 +83,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         await db.SetRoomAsync(room,RoomStatus.DangO);
         return await db.AuditAsync(user,"CheckIn",$"Lượt {stay.Id}; phòng {room.Number}");
     });
-    public Task CancelAsync(Stay selected,string method,decimal? expectedRefund=null) => Write(async db=>
+    public Task CancelAsync(Stay selected,string method,decimal? expectedRefund=null,string? reference=null) => Write(async db=>
     {
         Method(method);
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Reserved);
@@ -92,7 +93,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         var refund=overdue?0:stay.Deposit;
         if(expectedRefund is { } expected && expected!=refund) throw new BusinessException("Đã thay đổi số tiền được hoàn do quá hạn nhận phòng. Hãy đóng và mở lại để xác nhận chính sách mới.");
         await db.CloseStayAsync(stay,false,now);
-        await db.PaymentAsync(stay.Id,overdue?"Forfeit":"Refund",stay.Deposit,now,overdue?"Không phát sinh tiền":method,overdue?"Không đến nhận phòng trước hạn; không hoàn cọc":"Hoàn cọc khi hủy trước hạn",user);
+        await db.PaymentAsync(stay.Id,overdue?"Forfeit":"Refund",stay.Deposit,now,overdue?"Không phát sinh tiền":method,overdue?"Không đến nhận phòng trước hạn; không hoàn cọc":"Hoàn cọc khi hủy trước hạn",user,reference);
         await db.SetRoomAsync(room,room.Status);
         return await db.AuditAsync(user,overdue?"NoShow":"Cancel",$"Lượt {stay.Id}; hoàn {refund:N0}; giữ cọc {(overdue?stay.Deposit:0):N0}");
     });
@@ -151,6 +152,8 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
     public Task DeliverAsync(Stay selected) => Write(async db=>
     {
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Occupied);
+        foreach(var line in (await db.OrdersAsync(stay.Id)).Where(x=>x.DeliveredQuantity<x.Quantity))
+            await db.ConsumeOrderStockAsync(line.Id,line.Quantity-line.DeliveredQuantity,user.Id);
         await db.DeliverAsync(stay.Id,await db.NowAsync()); await db.TouchStayAsync(stay.Id);
         return await db.AuditAsync(user,"Deliver",$"Lượt {stay.Id}: giao tất cả yêu cầu đang chờ");
     });
@@ -188,7 +191,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Occupied);
         return await Quote(db,stay,await db.NowAsync());
     });
-    public Task<long> CheckoutAsync(BillQuote displayed,string method) => Write(async db=>
+    public Task<long> CheckoutAsync(BillQuote displayed,string method,string? reference=null) => Write(async db=>
     {
         Method(method);
         var stay=await db.StayAsync(displayed.Stay.Id); StayUnchanged(stay,displayed.Stay,StayStatus.Occupied);
@@ -200,7 +203,9 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         var id=await db.InvoiceAsync(bill,method,user,now);
         if(await db.EndSegmentAsync(stay.Id,bill.At)!=1) throw new BusinessException("Thiếu giai đoạn lưu trú.");
         await db.CloseStayAsync(stay,true,bill.At);
-        await db.PaymentAsync(stay.Id,"Checkout",bill.ToCollect,now,method,$"Hóa đơn {id}",user);
+        await db.PaymentAsync(stay.Id,"Checkout",bill.ToCollect,now,method,$"Hóa đơn {id}",user,reference);
+        if(method=="Công nợ OTA" && bill.ToCollect>0)
+            await db.AddDebtAsync("AR",$"OTA {reference}",id,now.AddDays(30),bill.ToCollect,$"Cấn trừ OTA theo hóa đơn {id}",user.Id);
         await db.PaymentAsync(stay.Id,"Refund",bill.ToRefund,now,method,$"Hoàn cọc thừa hóa đơn {id}",user);
         await db.SetRoomAsync(bill.Room,RoomStatus.DangDon);
         await db.AuditAsync(user,"Checkout",$"Hóa đơn {id}; lượt {stay.Id}");

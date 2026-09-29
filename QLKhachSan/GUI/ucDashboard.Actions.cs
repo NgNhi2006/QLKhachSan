@@ -64,11 +64,11 @@ public partial class ucDashboard
         var receiveBy=Ui.DatePicker(ServerNow.AddDays(1));
         var deposit=new CheckBox {Text="Đã thu tiền cọc",AutoSize=true};
         var amount=Ui.Money();
-        deposit.CheckedChanged+=(_,_)=>UpdateHold();
+        deposit.CheckedChanged+=(_,_)=>UpdateHold();amount.ValueChanged+=(_,_)=>UpdateHold();
         void UpdateHold()
         {
             if(!reserve)return;
-            receiveBy.Value=HotelService.ReservationHoldLimit(ServerNow,deposit.Checked);
+            var limit=HotelService.ReservationHoldLimit(ServerNow,deposit.Checked && amount.Value>0);var departure=arrival.Value.AddDays((int)days.Value);receiveBy.Value=limit<departure?limit:departure.AddMinutes(-1);
         }
         var depositInfo=new Label {AutoSize=true};
         void UpdateDeposit(){if(room.SelectedItem is Room r){depositInfo.Text=$"Cọc gợi ý: {r.Deposit:N0} đ";amount.Value=Math.Min(amount.Maximum,r.Deposit);}}
@@ -80,13 +80,14 @@ public partial class ucDashboard
             room.DataSource=rooms.Where(r=>!data.Stays.Any(s=>s.RoomId==r.Id && (s.CheckIn??s.Arrival)<until && s.Departure>from)).ToList();
             if(oldId is { } id && room.Items.Cast<Room>().FirstOrDefault(r=>r.Id==id) is { } previous)room.SelectedItem=previous;
         }
-        arrival.ValueChanged+=(_,_)=>FilterRooms();
-        days.ValueChanged+=(_,_)=>FilterRooms();FilterRooms();UpdateHold();
-        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản"});
+        arrival.ValueChanged+=(_,_)=>{FilterRooms();UpdateHold();};
+        days.ValueChanged+=(_,_)=>{FilterRooms();UpdateHold();};FilterRooms();UpdateHold();
+        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS","Công nợ OTA"});
+        var reference=Ui.Text(100);
         dialog.Add("Chọn phòng",room);dialog.Add("Họ và tên",name);dialog.Add("Số điện thoại",phone);dialog.Add("CCCD (12 số) / Hộ chiếu",identity);
         if(reserve){dialog.Add("Ngày giờ dự kiến đến",arrival);dialog.Add("Hạn cuối nhận phòng (tối đa 1 hoặc 15 ngày từ lúc đặt)",receiveBy);}
         dialog.Add("Số ngày thuê dự kiến",days);
-        if(reserve){dialog.Add("Tiền cọc",deposit);dialog.Add("",depositInfo);dialog.Add("Số tiền thực thu (đồng)",amount);dialog.Add("Hình thức thu cọc",method);}
+        if(reserve){dialog.Add("Tiền cọc",deposit);dialog.Add("",depositInfo);dialog.Add("Số tiền thực thu (đồng)",amount);dialog.Add("Hình thức thu cọc",method);dialog.Add("Mã giao dịch QR/POS",reference);}
         if(reserve)
         {
             PaymentQr.Add(dialog,method,()=>amount.Value,()=>"COC PHONG "+phone.Text.Trim(),amount,phone);
@@ -95,7 +96,7 @@ public partial class ucDashboard
         dialog.Action(reserve?"LƯU ĐẶT PHÒNG":"XÁC NHẬN NHẬN PHÒNG",async()=>
         {
             if(room.SelectedItem is not Room chosen)throw new BusinessException("Chưa chọn phòng.");
-            await Changed(async()=> {await service.CreateStayAsync(chosen,new GuestInput(name.Text,phone.Text,identity.Text),reserve,arrival.Value,(int)days.Value,reserve && deposit.Checked,(string)method.SelectedItem!,reserve?amount.Value:0,reserve?receiveBy.Value:null);});
+            await Changed(async()=> {await service.CreateStayAsync(chosen,new GuestInput(name.Text,phone.Text,identity.Text),reserve,arrival.Value,(int)days.Value,reserve && deposit.Checked,(string)method.SelectedItem!,reserve?amount.Value:0,reserve?receiveBy.Value:null,reference.Text);});
         });
         dialog.ShowDialog(this);return Task.CompletedTask;
     }
@@ -104,12 +105,12 @@ public partial class ucDashboard
         var refund=await service.RefundQuoteAsync(stay);
         using var dialog=new InputDialog("Hủy đặt phòng / Hoàn cọc",540,350);
         dialog.Note($"Khách: {stay.Guest}\nPhòng: {StayRoom(stay)?.Number}\nHạn nhận: {stay.HoldUntil:dd/MM/yyyy HH:mm}\nSố tiền được hoàn: {refund:N0} đ\nCọc không hoàn: {stay.Deposit-refund:N0} đ");
-        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản"});dialog.Add("Phương thức hoàn",method);
+        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS"});var reference=Ui.Text(100);dialog.Add("Phương thức hoàn",method);dialog.Add("Mã hoàn tiền (nếu có)",reference);
         var confirmed=new CheckBox {Text=refund>0?"Tôi xác nhận đã hoàn đủ tiền cọc":"Xác nhận hủy; không hoàn tiền cọc",AutoSize=true};dialog.Add("Xác nhận",confirmed);
         dialog.Action("HỦY ĐẶT PHÒNG",async()=>
         {
             if(!confirmed.Checked)throw new BusinessException("Cần xác nhận xử lý tiền cọc/giữ chỗ.");
-            await Changed(()=>service.CancelAsync(stay,(string)method.SelectedItem!,refund));
+            await Changed(()=>service.CancelAsync(stay,(string)method.SelectedItem!,refund,reference.Text));
         });
         dialog.ShowDialog(this);
     }

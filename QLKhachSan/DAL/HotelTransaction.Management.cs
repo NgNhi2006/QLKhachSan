@@ -6,7 +6,7 @@ public sealed partial class HotelTransaction
 {
     public async Task<List<RevenueDay>> RevenueTrendAsync(DateTime from,DateTime until)
     {
-        var rows=await Query("SELECT Day,SUM(Rooms),SUM(Services),SUM(Forfeits) FROM (SELECT CAST(Issued AS date) Day,RoomCharge Rooms,ServiceCharge Services,CAST(0 AS decimal(18,2)) Forfeits FROM dbo.Invoices WHERE Issued>=@p0 AND Issued<@p1 UNION ALL SELECT CAST(Created AS date),0,0,Amount FROM dbo.Payments WHERE Kind='Forfeit' AND Created>=@p0 AND Created<@p1) r GROUP BY Day ORDER BY Day",r=>new RevenueDay(r.GetDateTime(0),r.GetDecimal(1),r.GetDecimal(2),r.GetDecimal(3)),from,until);
+        var rows=await Query("SELECT Day,SUM(Rooms),SUM(Services),SUM(Forfeits) FROM (SELECT CAST(i.Issued AS date) Day,i.RoomCharge Rooms,i.ServiceCharge Services,CAST(0 AS decimal(18,2)) Forfeits FROM dbo.Invoices i WHERE i.Issued>=@p0 AND i.Issued<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.InvoiceVoids v WHERE v.InvoiceId=i.Id) UNION ALL SELECT CAST(Created AS date),0,0,Amount FROM dbo.Payments WHERE Kind='Forfeit' AND Created>=@p0 AND Created<@p1 UNION ALL SELECT CAST(a.CreatedAt AS date),0,-a.Amount,0 FROM dbo.InvoiceAdjustments a WHERE a.CreatedAt>=@p0 AND a.CreatedAt<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.InvoiceVoids v WHERE v.InvoiceId=a.InvoiceId)) r GROUP BY Day ORDER BY Day",r=>new RevenueDay(r.GetDateTime(0),r.GetDecimal(1),r.GetDecimal(2),r.GetDecimal(3)),from,until);
         var byDate=rows.ToDictionary(r=>r.Day);
         return Enumerable.Range(0,(until.Date-from.Date).Days).Select(i=>from.Date.AddDays(i)).Select(day=>byDate.GetValueOrDefault(day)??new RevenueDay(day,0,0,0)).ToList();
     }

@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using QLKhachSan.DAL;
 using QLKhachSan.DTO;
 
 namespace QLKhachSan.GUI;
@@ -10,7 +11,12 @@ internal static class Ui
         var message=ex switch
         {
             BusinessException => ex.Message,
+            SchemaMigrationException => ex.Message,
             SqlException s when s.Number==51001 => "Hệ thống đang xử lý giao dịch khác. Vui lòng thử lại.",
+            SqlException s when s.Number==51101 => "Kỳ kế toán đã khóa; không thể ghi hoặc sửa chứng từ thuộc kỳ này.",
+            SqlException s when s.Number==51102 => "Ca đã khóa; giao dịch thuộc ca không thể sửa hoặc hủy.",
+            SqlException s when s.Number==51103 => "Số dư mở sổ chỉ được ghi một lần, không thể sửa hoặc xóa.",
+            SqlException s when s.Number==51104 => "Kỳ kế toán đã khóa không thể sửa hoặc mở lại.",
             SqlException => "Không thể hoàn tất thao tác SQL Server. Dữ liệu không được thay bằng dữ liệu mẫu. Hãy kiểm tra kết nối, làm mới và kiểm tra kết quả trước khi thử lại.",
             _ => "Không thể hoàn tất thao tác. Hãy kiểm tra cấu hình hoặc dữ liệu và thử lại."
         };
@@ -38,6 +44,7 @@ internal static class Ui
     public static DataGridView Grid()
     {
         var grid=new DataGridView { Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,MultiSelect=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,RowHeadersVisible=false,BackgroundColor=Color.White,AutoGenerateColumns=true };
+        ExcelExport.Attach(grid,"Báo cáo");
         AppTheme.Grid(grid);return grid;
     }
     public static void Clear(Control parent)

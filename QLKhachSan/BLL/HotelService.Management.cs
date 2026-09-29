@@ -30,7 +30,7 @@ public sealed partial class HotelService
         var stay=await db.StayAsync(selected.Id);StayUnchanged(stay,selected,StayStatus.Reserved);
         var now=await db.NowAsync();
         if(stay.HoldUntil<=now) throw new BusinessException("Lượt đã quá hạn nhận, không được sửa để tránh chính sách mất cọc.");
-        if(days is <1 or >60 || arrival<now || arrival>=ReservationHoldLimit(stay.Created,stay.Deposit>0) || receiveBy<arrival || receiveBy>ReservationHoldLimit(stay.Created,stay.Deposit>0)) throw new BusinessException("Ngày đến và hạn nhận vượt thời gian giữ chỗ: tối đa 1 ngày chưa cọc, 15 ngày đã cọc, tính từ lúc đặt phòng.");
+        if(days is <1 or >60 || (arrival<now && arrival!=stay.Arrival) || arrival>=ReservationHoldLimit(stay.Created,stay.Deposit>0) || receiveBy<arrival || receiveBy>=arrival.AddDays(days) || receiveBy>ReservationHoldLimit(stay.Created,stay.Deposit>0)) throw new BusinessException("Ngày đến và hạn nhận vượt thời gian giữ chỗ: nếu đổi ngày đến phải chọn giờ chưa qua; hạn nhận phải trước ngày trả, tối đa 1 ngày chưa cọc hoặc 15 ngày đã cọc tính từ lúc đặt phòng.");
         var room=await db.RoomAsync(target.Id);RoomUnchanged(room,target,target.Status);
         if(room.Status==RoomStatus.BaoTri) throw new BusinessException("Phòng đang bảo trì.");
         await db.EnsureAvailableAsync(room.Id,arrival,arrival.AddDays(days),stay.Id);
@@ -47,9 +47,10 @@ public sealed partial class HotelService
     });
     public Task<Stay> InvoiceStayAsync(long stayId) => FinanceRead(db=>db.StayAsync(stayId));
     public Task<List<ServiceLine>> InvoiceOrdersAsync(long stayId) => FinanceRead(db=>db.AllOrdersAsync(stayId));
-    public Task AddDepositAsync(Stay selected,decimal amount,string method) => Write(async db=>
+    public Task AddDepositAsync(Stay selected,decimal amount,string method,string? reference=null) => Write(async db=>
     {
         ValidateMoney(amount);Method(method);
+        if(method=="Công nợ OTA")throw new BusinessException("Tiền cọc phải là tiền thực thu.");
         if(amount==0) throw new BusinessException("Tiền thu bổ sung phải lớn hơn 0.");
         var stay=await db.StayAsync(selected.Id);
         if(stay.Version!=selected.Version || stay.Status!=StayStatus.Reserved) throw new BusinessException("Chỉ thu cọc cho lượt đặt trước chưa nhận phòng. Hãy làm mới danh sách.");
@@ -57,8 +58,8 @@ public sealed partial class HotelService
         if(stay.Status==StayStatus.Reserved && stay.HoldUntil<=now) throw new BusinessException("Đã quá hạn nhận phòng, không thể thu thêm cọc.");
         ValidateMoney(stay.Deposit+amount);
         var fundedLimit=ReservationHoldLimit(stay.Created,true);
-        await db.AddDepositAsync(stay.Id,amount,stay.Deposit==0?fundedLimit:stay.HoldUntil);
-        await db.PaymentAsync(stay.Id,"Deposit",amount,now,method,"Thu cọc bổ sung",user);
+        await db.AddDepositAsync(stay.Id,amount,stay.Deposit==0?(fundedLimit<stay.Departure?fundedLimit:stay.Departure.AddTicks(-1)):stay.HoldUntil);
+        await db.PaymentAsync(stay.Id,"Deposit",amount,now,method,"Thu cọc bổ sung",user,reference);
         return await db.AuditAsync(user,"Deposit",$"Lượt {stay.Id}; thu {amount:N0}");
     });
     public Task ChangeOrderAsync(Stay selected,long orderId,int quantity,string reason,bool cancel=false) => Write(async db=>
@@ -85,6 +86,7 @@ public sealed partial class HotelService
         var stay=await db.StayAsync(selected.Id);StayUnchanged(stay,selected,StayStatus.Occupied);
         var line=(await db.OrdersAsync(stay.Id)).SingleOrDefault(x=>x.Id==orderId) ?? throw new BusinessException("Dịch vụ không tồn tại hoặc đã hủy.");
         if(quantity<1 || quantity>line.Quantity-line.DeliveredQuantity) throw new BusinessException("Số lượng giao vượt số còn chờ.");
+        await db.ConsumeOrderStockAsync(orderId,quantity,user.Id);
         await db.DeliverOrderAsync(orderId,quantity,await db.NowAsync());await db.TouchStayAsync(stay.Id);
         return await db.AuditAsync(user,"DeliverOrder",$"Dòng {orderId}; giao {quantity}");
     });

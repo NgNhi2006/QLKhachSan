@@ -18,6 +18,7 @@
     <EmbeddedResource Include="../Database/MigrateV3.sql" LogicalName="QLKhachSan.MigrateV3.sql" />
     <EmbeddedResource Include="../Database/MigrateV4.sql" LogicalName="QLKhachSan.MigrateV4.sql" />
     <EmbeddedResource Include="../Database/MigrateV5.sql" LogicalName="QLKhachSan.MigrateV5.sql" />
+    <EmbeddedResource Include="../Database/MigrateV6.sql" LogicalName="QLKhachSan.MigrateV6.sql" />
   </ItemGroup>
 
 </Project>
