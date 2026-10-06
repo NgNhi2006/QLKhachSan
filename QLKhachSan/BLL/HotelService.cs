@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 using QLKhachSan.DAL;
 using QLKhachSan.DTO;
 
@@ -6,17 +7,19 @@ namespace QLKhachSan.BLL;
 
 public sealed partial class HotelService(HotelRepository repository, UserSession user)
 {
-    private Task<T> Read<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); return await action(db); });
-    private Task<T> FinanceRead<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanViewFinance(user.Role))throw new BusinessException("Vai trò này không có quyền xem báo cáo tài chính."); return await action(db); });
-    private Task<T> OperationsRead<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanViewOperations(user.Role))throw new BusinessException("Vai trò này không có quyền xem dữ liệu vận hành."); return await action(db); });
-    private Task<T> Write<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(true,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanOperate(user.Role))throw new BusinessException("Vai trò này chỉ được xem dữ liệu, không được thay đổi nghiệp vụ."); return await action(db); });
-    private Task<T> CatalogWrite<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(true,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanManageCatalog(user.Role))throw new BusinessException("Không có quyền quản lý danh mục."); return await action(db); });
+    private Task<T> Read<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); FunctionPolicy.RequireMethod(user,caller); return await action(db); });
+    private Task<T> FinanceRead<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanViewFinance(user.Role))throw new BusinessException("Vai trò này không có quyền xem báo cáo tài chính."); FunctionPolicy.RequireMethod(user,caller); return await action(db); });
+    private Task<T> OperationsRead<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(false,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanViewOperations(user.Role))throw new BusinessException("Vai trò này không có quyền xem dữ liệu vận hành."); FunctionPolicy.RequireMethod(user,caller); return await action(db); });
+    private Task<T> Write<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(true,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanOperate(user.Role))throw new BusinessException("Vai trò này chỉ được xem dữ liệu, không được thay đổi nghiệp vụ."); FunctionPolicy.RequireMethod(user,caller); return await action(db); });
+    private Task<T> CatalogWrite<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(true,async db=> { await db.RequireUserAsync(user); if(!RolePolicy.CanManageCatalog(user.Role))throw new BusinessException("Không có quyền quản lý danh mục."); FunctionPolicy.RequireMethod(user,caller); return await action(db); });
     public Task<DashboardData> DashboardAsync(int revenueDays=7) => Read(async db=>
     {
         if(revenueDays is not (7 or 30))throw new BusinessException("Chọn 7 hoặc 30 ngày cho biểu đồ.");
         var now=await db.NowAsync();
-        var operations=RolePolicy.CanViewOperations(user.Role);
-        return new DashboardData(operations?await db.RoomsAsync():[],operations?await db.ActiveStaysAsync():[],operations?await db.PendingAsync():[],operations?await db.MenuAsync():[],RolePolicy.CanViewFinance(user.Role)?await db.RevenueAsync(now.Date):[],now,RolePolicy.CanViewFinance(user.Role)?await db.RevenueTrendAsync(now.Date.AddDays(1-revenueDays),now.Date.AddDays(1)):[]);
+        var operations=RolePolicy.CanViewOperations(user.Role) &&
+            (FunctionPolicy.CanAny(user,"rooms") || FunctionPolicy.Can(user,"service.order") || FunctionPolicy.Can(user,"service.manage"));
+        var revenue=FunctionPolicy.Can(user,"report.revenue");
+        return new DashboardData(operations?await db.RoomsAsync():[],operations?await db.ActiveStaysAsync():[],operations?await db.PendingAsync():[],operations?await db.MenuAsync():[],revenue?await db.RevenueAsync(now.Date):[],now,revenue?await db.RevenueTrendAsync(now.Date.AddDays(1-revenueDays),now.Date.AddDays(1)):[]);
     });
     public Task<List<CustomerSummary>> CustomersAsync(string search) => OperationsRead(db=>db.CustomersAsync(search.Trim()));
     public Task<List<Invoice>> CustomerInvoicesAsync(int customerId) => OperationsRead(db=>db.CustomerInvoicesAsync(customerId));
@@ -47,6 +50,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
     public static DateTime ReservationHoldLimit(DateTime created,bool hasDeposit) => created.AddDays(hasDeposit?15:1);
     public Task<long> CreateStayAsync(Room selected,GuestInput guest,bool reserve,DateTime arrival,int days,bool takeDeposit,string method,decimal? depositAmount=null,DateTime? receiveBy=null,string? reference=null)
     {
+        FunctionPolicy.Require(user,reserve?"room.reserve":"room.walkin");
         guest=ValidateGuest(guest); Method(method);
         if(reserve && takeDeposit && method=="Công nợ OTA")throw new BusinessException("Tiền cọc phải thực thu, không thể ghi nhận bằng công nợ OTA.");
         if(!reserve && (takeDeposit || depositAmount.GetValueOrDefault()!=0)) throw new BusinessException("Nhận phòng trực tiếp không thu cọc. Tiền cọc chỉ áp dụng cho đặt phòng trước.");
@@ -157,8 +161,10 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         await db.DeliverAsync(stay.Id,await db.NowAsync()); await db.TouchStayAsync(stay.Id);
         return await db.AuditAsync(user,"Deliver",$"Lượt {stay.Id}: giao tất cả yêu cầu đang chờ");
     });
-    public Task SetRoomStatusAsync(Room selected,RoomStatus next) => CatalogWrite(async db=>
+    public Task SetRoomStatusAsync(Room selected,RoomStatus next) => repository.RunAsync(true,async db=>
     {
+        await db.RequireUserAsync(user);
+        FunctionPolicy.Require(user,selected.Status==RoomStatus.DangDon?"room.clean":"room.maintain");
         var room=await db.RoomAsync(selected.Id); RoomUnchanged(room,selected,selected.Status);
         var allowed=(room.Status,next) is (RoomStatus.DangDon,RoomStatus.Trong) or (RoomStatus.Trong,RoomStatus.BaoTri) or (RoomStatus.BaoTri,RoomStatus.Trong);
         if(!allowed) throw new BusinessException("Không được chuyển trạng thái phòng theo cách này.");
@@ -210,5 +216,61 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         await db.SetRoomAsync(bill.Room,RoomStatus.DangDon);
         await db.AuditAsync(user,"Checkout",$"Hóa đơn {id}; lượt {stay.Id}");
         return id;
+    });
+    public Task<List<BillQuote>> GroupQuoteAsync(IReadOnlyList<Stay> selected) => Read(async db=>
+    {
+        if(!FunctionPolicy.Can(user,"room.checkout") && !FunctionPolicy.Can(user,"invoice.create"))
+            throw new BusinessException("Bạn không được cấp quyền lập hóa đơn.");
+        if(selected.Count is <2 or >20 || selected.Select(x=>x.Id).Distinct().Count()!=selected.Count ||
+           selected.Select(x=>x.CustomerId).Distinct().Count()!=1)
+            throw new BusinessException("Chọn 2–20 lượt ở của cùng một khách để lập phiếu tổng.");
+        var now=await db.NowAsync();var quotes=new List<BillQuote>();
+        foreach(var expected in selected)
+        {
+            var stay=await db.StayAsync(expected.Id);StayUnchanged(stay,expected,StayStatus.Occupied);
+            quotes.Add(await Quote(db,stay,now));
+        }
+        return quotes;
+    });
+    public Task<GroupCheckoutResult> GroupCheckoutAsync(IReadOnlyList<BillQuote> displayed,string method,string? reference=null) => Write(async db=>
+    {
+        if(!FunctionPolicy.Can(user,"room.checkout") && !FunctionPolicy.Can(user,"invoice.create"))
+            throw new BusinessException("Bạn không được cấp quyền lập hóa đơn.");
+        Method(method);
+        if(method=="Công nợ OTA")throw new BusinessException("Thanh toán gộp chưa hỗ trợ công nợ OTA. Hãy chọn phương thức thu thực tế.");
+        if(displayed.Count is <2 or >20 || displayed.Select(x=>x.Stay.Id).Distinct().Count()!=displayed.Count ||
+           displayed.Select(x=>x.Stay.CustomerId).Distinct().Count()!=1)
+            throw new BusinessException("Các phòng phải thuộc cùng một khách và không được trùng lượt ở.");
+        var now=await db.NowAsync();
+        if(displayed.Any(x=>x.At>now || now-x.At>TimeSpan.FromMinutes(10)))
+            throw new BusinessException("Bảng tính tiền đã hết hạn. Hãy lập lại phiếu tổng.");
+        var quotes=new List<BillQuote>();
+        foreach(var original in displayed)
+        {
+            var stay=await db.StayAsync(original.Stay.Id);StayUnchanged(stay,original.Stay,StayStatus.Occupied);
+            var bill=await Quote(db,stay,original.At);
+            if(bill.Lines.Any(x=>x.Delivered is null))throw new BusinessException($"Phòng {bill.Room.Number} còn dịch vụ chưa giao.");
+            if(bill.Total!=original.Total || bill.Stay.Deposit!=original.Stay.Deposit ||
+               bill.ToCollect!=original.ToCollect || bill.ToRefund!=original.ToRefund)
+                throw new BusinessException($"Số tiền phòng {bill.Room.Number} đã thay đổi. Hãy lập lại phiếu tổng.");
+            quotes.Add(bill);
+        }
+        var guest=quotes[0].Stay.Guest;
+        var groupId=await db.NewBillGroupAsync($"Thanh toán khách {guest} · {now:dd/MM/yyyy HH:mm}",user.Id);
+        var invoiceIds=new List<long>();
+        foreach(var bill in quotes)
+        {
+            var id=await db.InvoiceAsync(bill,method,user,now);invoiceIds.Add(id);
+            if(await db.EndSegmentAsync(bill.Stay.Id,bill.At)!=1)throw new BusinessException("Thiếu giai đoạn lưu trú.");
+            await db.CloseStayAsync(bill.Stay,true,bill.At);
+            await db.SetRoomAsync(bill.Room,RoomStatus.DangDon);
+            await db.AddBillShareAsync(groupId,id,guest,bill.Total);
+        }
+        var net=quotes.Sum(x=>x.ToCollect-x.ToRefund);
+        if(net!=0)await db.PaymentAsync(quotes[0].Stay.Id,net>0?"Checkout":"Refund",Math.Abs(net),now,method,
+            $"Thanh toán một lần phiếu tổng #{groupId}; {quotes.Count} phòng",user,reference);
+        await db.AuditAsync(user,"GroupCheckout",$"Nhóm {groupId}; khách {guest}; phòng {string.Join(',',quotes.Select(x=>x.Room.Number))}; tổng {quotes.Sum(x=>x.Total):N0}; thu {quotes.Sum(x=>x.ToCollect):N0}; hoàn {quotes.Sum(x=>x.ToRefund):N0}");
+        return new GroupCheckoutResult(groupId,invoiceIds,guest,quotes.Sum(x=>x.Total),quotes.Sum(x=>x.Stay.Deposit),
+            quotes.Sum(x=>x.ToCollect),quotes.Sum(x=>x.ToRefund));
     });
 }

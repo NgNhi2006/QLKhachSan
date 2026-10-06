@@ -23,15 +23,15 @@ internal sealed class LoginBrandPanel : Panel
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using var background = new LinearGradientBrush(ClientRectangle,
-            Color.FromArgb(19, 41, 66), Color.FromArgb(22, 92, 101), 130F);
+            Color.FromArgb(43, 42, 68), Color.FromArgb(85, 73, 121), 125F);
         g.FillRectangle(background, ClientRectangle);
 
-        using var glow = new SolidBrush(Color.FromArgb(13, 163, 207, 207));
-        g.FillEllipse(glow, Width - 170, -125, 310, 310);
-        g.FillEllipse(glow, -170, Height - 190, 300, 300);
+        using var glow = new SolidBrush(Color.FromArgb(24, 236, 192, 153));
+        g.FillEllipse(glow, Width - 180, -110, 340, 340);
+        g.FillEllipse(glow, -200, Height - 180, 340, 340);
 
         // Quiet architectural lines keep the brand panel visually tied to the hotel.
-        using var line = new Pen(Color.FromArgb(29, 190, 227, 226), 1F);
+        using var line = new Pen(Color.FromArgb(56, 238, 214, 196), 1F);
         var baseY = Height - 91;
         g.DrawLine(line, 0, baseY, Width, baseY);
         for (var i = 0; i < 5; i++)
@@ -57,18 +57,18 @@ internal sealed class LoginBrandPanel : Panel
             TextRenderer.DrawText(graphics, value, font, area, color,
                 TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak);
         Draw(g, "HOTEL DESK", brandFont, new Rectangle(122, 60, 260, 32), Color.White);
-        Draw(g, "KHÔNG GIAN QUẢN LÝ LƯU TRÚ", captionFont,
-            new Rectangle(123, 91, 270, 20), Color.FromArgb(151, 205, 213));
-        Draw(g, "CHÀO MỪNG TRỞ LẠI", eyebrowFont,
-            new Rectangle(54, 218, 300, 25), Color.FromArgb(131, 224, 211));
-        Draw(g, "Quản lý thật", heroFont,
+        Draw(g, "HỆ THỐNG ĐIỀU HÀNH", captionFont,
+            new Rectangle(123, 91, 270, 20), Color.FromArgb(224, 202, 219));
+        Draw(g, "MỘT NƠI CHO MỖI NGÀY LÀM VIỆC", eyebrowFont,
+            new Rectangle(54, 218, 345, 25), Color.FromArgb(244, 191, 151));
+        Draw(g, "Mọi phòng.", heroFont,
             new Rectangle(50, 256, 350, 50), Color.White);
-        Draw(g, "dễ dàng hơn.", heroFont,
-            new Rectangle(50, 306, 350, 50), Color.White);
-        Draw(g, "Quản lý phòng, khách lưu trú và dịch vụ\ntrong một không gian rõ ràng, dễ sử dụng.",
-            bodyFont, new Rectangle(54, 382, 335, 58), Color.FromArgb(199, 219, 231));
-        Draw(g, "HOTEL OPERATIONS  /  2026", footerFont,
-            new Rectangle(54, Height - 50, 300, 24), Color.FromArgb(142, 174, 190));
+        Draw(g, "Một nhịp làm việc.", heroFont,
+            new Rectangle(50, 306, 360, 50), Color.White);
+        Draw(g, "Theo dõi lưu trú, đón khách và xử lý công việc\ntrong một giao diện tập trung.",
+            bodyFont, new Rectangle(54, 382, 345, 58), Color.FromArgb(224, 218, 232));
+        Draw(g, "HOTEL DESK  /  WORKSPACE", footerFont,
+            new Rectangle(54, Height - 50, 300, 24), Color.FromArgb(193, 181, 206));
     }
 
     protected override void Dispose(bool disposing)
@@ -133,7 +133,7 @@ internal sealed class LoginFieldPanel : Panel
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         BackColor = Color.White;
-        icon = UiIcons.Create(iconKind, Color.FromArgb(113, 136, 155), 21);
+        icon = UiIcons.Create(iconKind, AppTheme.Blue, 21);
     }
 
     public void TrackFocus(Control child)
@@ -149,8 +149,8 @@ internal sealed class LoginFieldPanel : Panel
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using var shape = AppTheme.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), 11);
         using var fill = new SolidBrush(Color.White);
-        using var outline = new Pen(ContainsFocus ? Color.FromArgb(30, 148, 144) :
-            Color.FromArgb(213, 224, 233), ContainsFocus ? 1.8F : 1F);
+        using var outline = new Pen(ContainsFocus ? AppTheme.Blue :
+            AppTheme.Border, ContainsFocus ? 1.8F : 1F);
         g.FillPath(fill, shape);
         g.DrawPath(outline, shape);
         g.DrawImage(icon, 19, (Height - 21) / 2, 21, 21);
@@ -191,10 +191,10 @@ internal sealed class LoginActionButton : Button
         g.Clear(Parent?.BackColor ?? Color.White);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var top = !Enabled ? Color.FromArgb(153, 172, 186) :
-            pressed ? Color.FromArgb(17, 105, 110) :
-            hovered ? Color.FromArgb(29, 137, 143) : Color.FromArgb(32, 121, 137);
-        var bottom = !Enabled ? top : pressed ? Color.FromArgb(23, 89, 108) :
-            hovered ? Color.FromArgb(27, 114, 139) : Color.FromArgb(30, 100, 131);
+            pressed ? Color.FromArgb(61, 55, 105) :
+            hovered ? Color.FromArgb(103, 94, 151) : AppTheme.Blue;
+        var bottom = !Enabled ? top : pressed ? Color.FromArgb(49, 45, 86) :
+            hovered ? Color.FromArgb(83, 76, 132) : Color.FromArgb(65, 58, 111);
         using var shape = AppTheme.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), 12);
         using var gradient = new LinearGradientBrush(ClientRectangle, top, bottom, LinearGradientMode.Horizontal);
         g.FillPath(gradient, shape);

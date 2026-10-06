@@ -25,7 +25,10 @@ public sealed partial class AuthService(HotelRepository repository)
         {
             if(await db.UserCountAsync()!=0) throw new BusinessException("Đã có tài khoản quản trị. Vui lòng đăng nhập.");
             var id=await db.CreateUserAsync(username,hash,salt,Iterations,"Admin");
-            var session=new UserSession(id,username,"Admin");
+            var session=new UserSession(id,username,"Admin")
+            {
+                GrantedFunctions=await db.MenuFunctionCodesAsync()
+            };
             await db.AuditAsync(session,"Setup","Tạo quản trị ban đầu");
             return session;
         });
@@ -45,7 +48,11 @@ public sealed partial class AuthService(HotelRepository repository)
             var ok=CryptographicOperations.FixedTimeEquals(calculated,a.Hash);
             await db.LoginResultAsync(a.Id,ok);
             if(!ok) return null; // Commit the failure counter rather than roll it back.
-            var user=new UserSession(a.Id,a.Username,a.Role) {SecurityVersion=a.SecurityVersion};
+            var user=new UserSession(a.Id,a.Username,a.Role)
+            {
+                SecurityVersion=a.SecurityVersion,
+                GrantedFunctions=await db.UserFunctionsAsync(a.Id)
+            };
             await db.AuditAsync(user,"Login","Đăng nhập");
             return user;
         });
@@ -59,6 +66,7 @@ public sealed partial class AuthService(HotelRepository repository)
         await repository.RunAsync(true,async db =>
         {
             await db.RequireUserAsync(actor,true);
+            FunctionPolicy.Require(actor,"staff.manage");
             if(await db.AccountAsync(username)!=null) throw new BusinessException("Tên đăng nhập đã tồn tại.");
             await db.CreateUserAsync(username,hash,salt,Iterations,role);
             return await db.AuditAsync(actor,"CreateUser",username+" / "+role);
@@ -71,6 +79,7 @@ public sealed partial class AuthService(HotelRepository repository)
         await repository.RunAsync(true,async db=>
         {
             await db.RequireUserAsync(user);
+            FunctionPolicy.Require(user,"system.password");
             var account=await db.AccountAsync(user.Username) ?? throw new BusinessException("Tài khoản không tồn tại.");
             var oldHash=await Task.Run(()=>Hash(oldPassword,account.Salt,account.Iterations));
             if(!CryptographicOperations.FixedTimeEquals(oldHash,account.Hash)) throw new BusinessException("Mật khẩu hiện tại không đúng.");

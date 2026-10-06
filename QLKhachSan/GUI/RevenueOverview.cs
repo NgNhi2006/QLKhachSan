@@ -10,6 +10,8 @@ internal sealed class RevenueOverview : UserControl
     private readonly Button details=new() {Text="XEM BÁO CÁO CHI TIẾT"};
     private readonly RevenuePlot trend=new(false),categories=new(true);
     public int Days=>period.SelectedIndex==1?30:7;
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool CanViewDetails { get => details.Visible; set => details.Visible=value; }
     public event EventHandler? PeriodChanged;
     public event EventHandler? DetailsRequested;
     public RevenueOverview()
@@ -19,7 +21,7 @@ internal sealed class RevenueOverview : UserControl
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute,74));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,98));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         var header=new Panel {Dock=DockStyle.Fill};
-        header.Controls.Add(new Label {Text="Tổng quan doanh thu",Font=AppTheme.Title,ForeColor=AppTheme.Ink,Location=new Point(0,0),AutoSize=true});
+        header.Controls.Add(new Label {Text="Biểu đồ doanh thu",Font=AppTheme.Title,ForeColor=AppTheme.Ink,Location=new Point(0,0),AutoSize=true});
         range.Font=AppTheme.Small;range.ForeColor=AppTheme.Muted;range.Location=new Point(2,38);range.AutoSize=true;header.Controls.Add(range);
         period.Width=165;period.Dock=DockStyle.None;period.Anchor=AnchorStyles.Top|AnchorStyles.Right;period.Font=AppTheme.Body;header.Controls.Add(period);
         details.Width=180;details.Height=32;AppTheme.Button(details);header.Controls.Add(details);

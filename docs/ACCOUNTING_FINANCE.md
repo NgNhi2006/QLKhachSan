@@ -2,7 +2,7 @@
 
 ## Phạm vi triển khai
 
-Mở **Tài chính / Bàn giao ca** từ thanh công cụ. Lễ tân thấy ca của mình; Kế toán, Quản lý và Admin thấy sổ kế toán. Dữ liệu nằm trong SQL Server; `Database/MigrateV6.sql` được ứng dụng chạy sau V5. Sao lưu và kiểm tra khả năng khôi phục trước khi nâng cấp cơ sở dữ liệu.
+Mở **Ca trực → Ca trực / bàn giao** từ menu tổng. Lễ tân thấy ca của mình; Kế toán, Quản lý và Admin thấy sổ kế toán. Dữ liệu nằm trong SQL Server; phần V6 của [`Database/Database.sql`](../Database/Database.sql) tạo các bảng kế toán. Sao lưu và kiểm tra khả năng khôi phục trước khi nâng cấp cơ sở dữ liệu.
 
 ## Quy trình ca trực
 
@@ -17,26 +17,26 @@ Các dịch vụ đã giao trước V6 cũng không có bút toán giá vốn; k
 
 ## Tiền và chứng từ
 
-- `FinanceVouchers` giữ phiếu thu/chi theo kênh Cash/Bank/POS/OTA, hạng mục, đối tượng, mã tham chiếu và người lập. Tiền cọc có hạng mục riêng để không cộng vào doanh thu.
+- `PhieuThuChi` giữ phiếu thu/chi theo kênh Cash/Bank/POS/OTA, hạng mục, đối tượng, mã tham chiếu và người lập. Tiền cọc có hạng mục riêng để không cộng vào doanh thu.
 - **Nhập số dư mở sổ** một lần cho từng kênh, tại đầu ngày bắt đầu sử dụng sổ. Số dư này phải đối chiếu với tiền thực đếm/sao kê tại thời điểm chuyển hệ thống. Báo cáo trước ngày mở sổ bị từ chối để tránh cộng trùng lịch sử.
-- `BookAsync` cộng cả `Payments` lẫn `FinanceVouchers`: **đầu kỳ + thu - chi = cuối kỳ**. Phiếu mua tồn kho, trả nợ và tạm ứng được loại khỏi chi phí vận hành sơ bộ.
+- `BookAsync` cộng cả `GiaoDichThanhToan` lẫn `PhieuThuChi`: **đầu kỳ + thu - chi = cuối kỳ**. Phiếu mua tồn kho, trả nợ và tạm ứng được loại khỏi chi phí vận hành sơ bộ.
 - QR/POS yêu cầu mã giao dịch khi thu. Chuyển khoản thực tế cần xác minh bằng sao kê; ảnh VietQR không chứng minh đã nhận tiền.
 - Tab **Đối soát ngân hàng** nhận các dòng `yyyy-MM-dd HH:mm; Bank/POS; mã; số tiền có dấu`. Hệ thống khớp duy nhất theo kênh, mã và số tiền. Dòng không khớp giữ lại để xử lý; không tự xác nhận giao dịch chỉ vì trùng ngày.
 
 ## Công nợ
 
-`FinanceDebts` lưu AR/AP, đối tượng, hóa đơn tham chiếu tùy chọn, hạn và số gốc. Mỗi lần thu hồi/trả nợ lập phiếu thu/chi rồi phân bổ trong `DebtAllocations`; tổng phân bổ không vượt nợ còn lại hoặc phần phiếu chưa dùng. Báo cáo chia tuổi nợ dưới 30, 30–60, 60–90 và trên 90 ngày theo hạn thanh toán. Công nợ OTA phát sinh tự động khi checkout chọn **Công nợ OTA**; kênh này không được tính là tiền mặt đã nhận.
+`CongNo` lưu AR/AP, đối tượng, hóa đơn tham chiếu tùy chọn, hạn và số gốc. Mỗi lần thu hồi/trả nợ lập phiếu thu/chi rồi phân bổ trong `PhanBoCongNo`; tổng phân bổ không vượt nợ còn lại hoặc phần phiếu chưa dùng. Báo cáo chia tuổi nợ dưới 30, 30–60, 60–90 và trên 90 ngày theo hạn thanh toán. Công nợ OTA phát sinh tự động khi checkout chọn **Công nợ OTA**; kênh này không được tính là tiền mặt đã nhận.
 
 ## Minibar và vật tư
 
-Tạo `StockItems`, có thể gắn `ServiceId` của danh mục dịch vụ. Phiếu nhập làm tăng tồn và tính lại **giá vốn bình quân gia quyền**. Khi lễ tân giao dịch vụ đã gắn hàng kho, cùng một SQL transaction ghi `StockMovements.Kind='Sale'`, giảm tồn và chốt `UnitCost` tại thời điểm xuất. Thiếu tồn thì giao dịch bị từ chối. Có phiếu xuất hủy, dùng nội bộ và báo tiêu thụ buồng phòng. Tab kho đối chiếu **số trên bill / buồng phòng báo / lượng xuất bán / tồn sổ sách**; sai lệch cần kiểm tra thực tế.
+Tạo `HangTonKho`, có thể gắn `ServiceId` của danh mục dịch vụ. Phiếu nhập làm tăng tồn và tính lại **giá vốn bình quân gia quyền**. Khi lễ tân giao dịch vụ đã gắn hàng kho, cùng một SQL transaction ghi `BienDongKho.LoaiGiaoDich='Sale'`, giảm tồn và chốt `UnitCost` tại thời điểm xuất. Thiếu tồn thì giao dịch bị từ chối. Có phiếu xuất hủy, dùng nội bộ và báo tiêu thụ buồng phòng. Tab kho đối chiếu **số trên bill / buồng phòng báo / lượng xuất bán / tồn sổ sách**; sai lệch cần kiểm tra thực tế.
 
 ## Hóa đơn
 
-- Hủy hóa đơn lưu lý do chuẩn, giải trình, người duyệt và thời điểm trong `InvoiceVoids`. Hóa đơn gốc không bị xóa. Báo cáo lãi/lỗ loại doanh thu của hóa đơn đã hủy; khoản phải thu chưa gạch nợ được hủy cùng giao dịch. Hóa đơn đã gạch nợ phải xử lý chứng từ hoàn/điều chỉnh trước.
+- Hủy hóa đơn lưu lý do chuẩn, giải trình, người duyệt và thời điểm trong `HoaDonHuy`. Hóa đơn gốc không bị xóa. Báo cáo lãi/lỗ loại doanh thu của hóa đơn đã hủy; khoản phải thu chưa gạch nợ được hủy cùng giao dịch. Hóa đơn đã gạch nợ phải xử lý chứng từ hoàn/điều chỉnh trước.
 - Giảm trừ lưu loại dịch vụ kém/VIP/voucher, số tiền, lý do và người phê duyệt. Báo cáo lãi/lỗ trừ khoản này ở kỳ phê duyệt.
-- Tách/gộp lưu các phần thanh toán vào `BillGroups` và `BillShares`. Một hóa đơn phải được phân bổ đủ tổng tiền; nhiều dòng cùng hóa đơn là tách, nhiều hóa đơn cùng nhóm là gộp. Đây là **bảng phân bổ nội bộ**, không phát hành hóa đơn thuế con.
-- Đánh dấu số e-Invoice đã phát hành một lần; số phải duy nhất. Trường VAT 8/10%, phí phục vụ 0/5% và đơn vị làm tròn lưu trong `InvoiceFinance` để đối chiếu chứng từ. Ứng dụng chưa kết nối nhà cung cấp hóa đơn điện tử và chưa tính cộng VAT/phí vào bill gốc. Kế toán phải kiểm tra số tiền trên chứng từ điện tử trước khi đánh dấu.
+- Tách/gộp lưu các phần thanh toán vào `NhomHoaDon` và `PhanChiaHoaDon`. Một hóa đơn phải được phân bổ đủ tổng tiền; nhiều dòng cùng hóa đơn là tách, nhiều hóa đơn cùng nhóm là gộp. Đây là **bảng phân bổ nội bộ**, không phát hành hóa đơn thuế con.
+- Đánh dấu số e-Invoice đã phát hành một lần; số phải duy nhất. Trường VAT 8/10%, phí phục vụ 0/5% và đơn vị làm tròn lưu trong `ThongTinTaiChinhHoaDon` để đối chiếu chứng từ. Ứng dụng chưa kết nối nhà cung cấp hóa đơn điện tử và chưa tính cộng VAT/phí vào bill gốc. Kế toán phải kiểm tra số tiền trên chứng từ điện tử trước khi đánh dấu.
 - Void và giảm trừ **không tự tạo khoản hoàn tiền**. Khi tiền đã thực thu, kế toán cần lập phiếu chi/hoàn tương ứng và lưu chứng từ gốc; không dùng trạng thái hủy để giả định tiền đã rời quỹ.
 
 ## Chỉ số và giới hạn báo cáo

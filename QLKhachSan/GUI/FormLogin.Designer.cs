@@ -31,7 +31,7 @@ partial class FormLogin
         components = new System.ComponentModel.Container();
         SuspendLayout();
         AutoScaleMode = AutoScaleMode.Dpi;
-        BackColor = Color.FromArgb(248, 250, 253);
+        BackColor = AppTheme.Canvas;
         ClientSize = new Size(980, 600);
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
@@ -40,7 +40,7 @@ partial class FormLogin
         Font = new Font("Segoe UI", 10F);
 
         pnlBanner = new LoginBrandPanel { Dock = DockStyle.Left, Width = 410, TabStop = false };
-        pnlForm = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248, 250, 253) };
+        pnlForm = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Canvas };
         Controls.Add(pnlForm);
         Controls.Add(pnlBanner);
 
@@ -53,19 +53,19 @@ partial class FormLogin
         pnlForm.Controls.Add(lblClose);
         pnlForm.Controls.Add(new Label
         {
-            Text = "TÀI KHOẢN NHÂN VIÊN", Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(28, 137, 130), AutoSize = true, Location = new Point(68, 100)
+            Text = "KHÔNG GIAN LÀM VIỆC", Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            ForeColor = AppTheme.Amber, AutoSize = true, Location = new Point(68, 100)
         });
         lblTitleLogin = new Label
         {
             Text = "Đăng nhập", Font = new Font("Segoe UI Semibold", 27F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(26, 46, 66), AutoSize = true, Location = new Point(63, 130)
+            ForeColor = AppTheme.Ink, AutoSize = true, Location = new Point(63, 130)
         };
         pnlForm.Controls.Add(lblTitleLogin);
         lblSubtitle = new Label
         {
             Text = "Nhập thông tin để tiếp tục công việc của bạn.", Font = new Font("Segoe UI", 10F),
-            ForeColor = Color.FromArgb(102, 119, 138), Size = new Size(430, 44),
+            ForeColor = AppTheme.Muted, Size = new Size(430, 44),
             Location = new Point(68, 190)
         };
         pnlForm.Controls.Add(lblSubtitle);
@@ -73,7 +73,7 @@ partial class FormLogin
         lblUsername = new Label
         {
             Text = "Tên đăng nhập", Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(52, 68, 87), AutoSize = true, Location = new Point(68, 246)
+            ForeColor = AppTheme.Ink, AutoSize = true, Location = new Point(68, 246)
         };
         pnlForm.Controls.Add(lblUsername);
         pnlAccountField = new LoginFieldPanel("people") { Bounds = new Rectangle(68, 273, 430, 50), TabIndex = 0, TabStop = false };
@@ -84,7 +84,7 @@ partial class FormLogin
         lblPassword = new Label
         {
             Text = "Mật khẩu", Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(52, 68, 87), AutoSize = true, Location = new Point(68, 341)
+            ForeColor = AppTheme.Ink, AutoSize = true, Location = new Point(68, 341)
         };
         pnlForm.Controls.Add(lblPassword);
         pnlPasswordField = new LoginFieldPanel("key") { Bounds = new Rectangle(68, 368, 430, 50), TabIndex = 1, TabStop = false };

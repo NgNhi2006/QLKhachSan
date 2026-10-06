@@ -4,3 +4,4 @@
 *.user
 artifacts/
 review-backup/
+_DbBackup/

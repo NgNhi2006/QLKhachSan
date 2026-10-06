@@ -48,7 +48,7 @@ public partial class ucDashboard : UserControl
             if(loaded)return;loaded=true;
             ReflowSidebar();
             clock.Start();refreshTimer.Start();
-            await Run(async()=> {if(RolePolicy.CanOperate(user.Role))await service.ExpireReservationsAsync();await Reload();});
+            await Run(async()=> {if(RolePolicy.CanOperate(user.Role))await service.ExpireReservationsAsync();await Reload();await ReloadMenuConfiguration();});
         };
         cboBoLocLich.SelectedIndex=0;
         lblHeaderTitle.Text=$"QUẢN LÝ KHÁCH SẠN • {user.Username} ({RolePolicy.Name(user.Role)})";
@@ -58,7 +58,9 @@ public partial class ucDashboard : UserControl
         lblCard4Sub.Text="Dự kiến trả trong ngày";btnDatLichPhong.Text="Đặt trước / Giữ chỗ";
         btnBaoTri.Visible=RolePolicy.CanMaintainRooms(user.Role);
         var operatorAccess=RolePolicy.CanOperate(user.Role);
-        foreach(var button in new[]{btnCheckIn,btnDatLichPhong,btnGoiDichVu,btnBaoDonXong,btnDoiPhong,btnGiaHan})button.Visible=operatorAccess;
+        foreach(var button in new[]{btnCheckIn,btnDatLichPhong,btnGoiDichVu,btnBaoDonXong})button.Visible=operatorAccess;
+        // These actions remain available from a selected room, where their context is clear.
+        btnDoiPhong.Visible=false;btnGiaHan.Visible=false;
         btnTimPhong.Visible=operatorAccess;txtTimPhong.Visible=operatorAccess;
         btnQuanLyKhach.Visible=RolePolicy.CanViewOperations(user.Role);
         if(!RolePolicy.CanViewOperations(user.Role)){tabMainView.TabPages.Remove(tabMatrix);tabMainView.TabPages.Remove(tabLichTrinh);pnlRight.Visible=false;}
@@ -77,8 +79,7 @@ public partial class ucDashboard : UserControl
             invoices.Click+=async (_,_)=>await Run(ShowInvoices);pnlLeftTools.Controls.Add(invoices);
         }
         if(RolePolicy.CanViewOperations(user.Role))AddTool("Lịch đặt / Lịch sử",user.Role=="Admin"?690:600,ShowStayHistory);
-        if(operatorAccess){AddTool("Thu cọc bổ sung",user.Role=="Admin"?735:645,ShowDeposit);AddTool("Xử lý dịch vụ",user.Role=="Admin"?780:690,ShowOrderManagement);}
-        if(user.Role is "Admin" or "Manager")AddTool("Nhật ký thao tác",user.Role=="Admin"?825:735,ShowAudit);
+        if(operatorAccess)AddTool("Xử lý dịch vụ",user.Role=="Admin"?780:690,ShowOrderManagement);
         if(user.Role=="Manager")AddTool("Nhân viên",780,ShowEmployees);
         if(RolePolicy.CanManageCatalog(user.Role))
         {
@@ -94,6 +95,7 @@ public partial class ucDashboard : UserControl
         ConfigureScheduleView();
         ApplyAppearance();
         ConfigureRoleDashboard();
+        InitializeNavigation();
         ReflowSidebar();
     }
     public void StopTimers(){clock.Stop();refreshTimer.Stop();}
@@ -116,12 +118,15 @@ public partial class ucDashboard : UserControl
     private async Task Reload()
     {
         var fresh=await service.DashboardAsync(revenueOverview?.Days??7);
-        var schedule=RolePolicy.CanViewOperations(user.Role)?await service.TodayScheduleAsync(fresh.ServerNow.Date):[];
-        accountingToday=user.Role=="Accountant" ? await service.PeriodReportAsync(fresh.ServerNow.Date,fresh.ServerNow.Date) : null;
+        var schedule=FunctionPolicy.Can(user,"room.schedule")?await service.TodayScheduleAsync(fresh.ServerNow.Date):[];
+        accountingToday=null;
         if(IsDisposed)return;
         data=fresh;todaySchedule=schedule;serverElapsed.Restart();lastDate=fresh.ServerNow.Date;
-        lblHeaderTitle.Text=$"{DashboardTitle()} • {user.Username}";
+        UpdateNavigationTitle();
         Render();
+        UpdateMenuMetrics();
+        if(activeFunction is "room.walkin" or "room.reserve")RefreshAvailableRooms();
+        if(activeFunction is "room.deposit" or "room.checkin" or "room.booking_edit" or "room.booking_cancel")RefreshReservedBookings();
     }
     private async Task Changed(Func<Task> command)
     {
@@ -167,7 +172,19 @@ public partial class ucDashboard : UserControl
             if(!roomButtons.TryGetValue(room.Id,out var button))
             {
                 button=new RoomTile();
-                button.Click+=async (sender,_)=> {if(RolePolicy.CanOperate(user.Role) && sender is Button {Tag:Room selected})await Run(()=>RoomAction(selected));};
+                button.Click+=async (sender,_)=>
+                {
+                    if(sender is not Button {Tag:Room selected})return;
+                    var code=selected.Status switch
+                    {
+                        RoomStatus.Trong=>"room.walkin",
+                        RoomStatus.DangO=>"room.checkout",
+                        RoomStatus.DangDon=>"room.clean",
+                        RoomStatus.BaoTri=>"room.maintain",
+                        _=>"room.map"
+                    };
+                    if(FunctionPolicy.Can(user,code))await Run(()=>RoomAction(selected));
+                };
                 roomButtons.Add(room.Id,button);
             }
             var parent=room.Type switch {"Đơn"=>flpDon,"Đôi"=>flpDoi,_=>flpVIP};
@@ -205,7 +222,9 @@ public partial class ucDashboard : UserControl
     {
         dgvDatCoc.DataSource=data.Stays.Where(s=>s.Status==StayStatus.Reserved).OrderBy(s=>s.Arrival).Select(s=>new BookingRow(s.Id,StayRoom(s)?.Number??"?",s.Guest,s.Phone,s.Identity,s.Arrival,s.HoldUntil,s.Deposit,s.HoldUntil<=ServerNow?"QUÁ HẠN — KHÔNG HOÀN CỌC":"Chờ nhận")).ToList();
         if(dgvDatCoc.Columns["Id"] is { } idColumn)idColumn.Visible=false;
-        if(RolePolicy.CanOperate(user.Role)){AddAction(dgvDatCoc,"checkin","Nhận phòng");AddAction(dgvDatCoc,"edit","Sửa thông tin khách");AddAction(dgvDatCoc,"cancel","Hủy / xử lý cọc");}
+        if(FunctionPolicy.Can(user,"room.checkin"))AddAction(dgvDatCoc,"checkin","Nhận phòng");
+        if(FunctionPolicy.Can(user,"room.booking_edit"))AddAction(dgvDatCoc,"edit","Sửa thông tin khách");
+        if(FunctionPolicy.Can(user,"room.booking_cancel"))AddAction(dgvDatCoc,"cancel","Hủy / xử lý cọc");
         dgvDatCoc.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.AllCells;
         if(dgvDatCoc.Columns["NgàyĐến"] is { } arrival){arrival.HeaderText="Ngày đến";arrival.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
         if(dgvDatCoc.Columns["HạnGiữ"] is { } hold){hold.HeaderText="Hạn giữ";hold.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
@@ -229,7 +248,8 @@ public partial class ucDashboard : UserControl
             if(grid.Columns["Id"] is { } id)id.Visible=false;
             if(grid.Columns["NghiệpVụ"] is { } task)task.Visible=false;
             if(grid.Columns["ThờiGian"] is { } time){time.HeaderText="Thời gian";time.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
-            if(RolePolicy.CanOperate(user.Role) && stage is "Chờ nhận" or "Chờ trả")
+            if((stage=="Chờ nhận" && FunctionPolicy.Can(user,"room.checkin")) ||
+               (stage=="Chờ trả" && FunctionPolicy.Can(user,"room.checkout")))
             {
                 AddAction(grid,"action",stage=="Chờ nhận"?"Nhận phòng":"Trả phòng");
                 if(grid.Columns["action"] is { } action){action.AutoSizeMode=DataGridViewAutoSizeColumnMode.None;action.Width=130;}
@@ -241,9 +261,11 @@ public partial class ucDashboard : UserControl
     }
     private async Task HandleScheduleAction(DataGridView grid,DataGridViewCellEventArgs e)
     {
-        if(!RolePolicy.CanOperate(user.Role) || e.RowIndex<0 || e.ColumnIndex<0 || grid.Columns[e.ColumnIndex].Name!="action"
+        if(e.RowIndex<0 || e.ColumnIndex<0 || grid.Columns[e.ColumnIndex].Name!="action"
             || grid.Rows[e.RowIndex].DataBoundItem is not ScheduleRow row)return;
         var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id);if(stay is null)return;
+        if(stay.Status==StayStatus.Reserved && !FunctionPolicy.Can(user,"room.checkin"))return;
+        if(stay.Status==StayStatus.Occupied && !FunctionPolicy.Can(user,"room.checkout"))return;
         await Run(async()=>
         {
             if(stay.Status==StayStatus.Reserved)
@@ -261,7 +283,7 @@ public partial class ucDashboard : UserControl
         foreach(var room in rooms)
         {
             var button=new Button {Text=$"{room.Number}\nXong",Width=58,Height=50};AppTheme.Button(button);button.ForeColor=AppTheme.Amber;
-            button.Enabled=RolePolicy.CanOperate(user.Role);button.Click+=async (_,_)=>await Run(()=>RoomAction(room));flpDonPhong.Controls.Add(button);
+            button.Enabled=FunctionPolicy.Can(user,"room.clean");button.Click+=async (_,_)=>await Run(()=>RoomAction(room));flpDonPhong.Controls.Add(button);
         }
     }
     private void RenderOrders()
@@ -275,12 +297,14 @@ public partial class ucDashboard : UserControl
             panel.Controls.Add(new Label {Text=$"P.{StayRoom(stay)?.Number}  •  {stay.Guest}",Font=AppTheme.Bold,ForeColor=AppTheme.Ink,AutoSize=true,MaximumSize=new Size(175,0)});
             panel.Controls.Add(new Label {Text=string.Join("\n",group.Select(x=>$"{x.Name}  × {x.Quantity-x.DeliveredQuantity}")),ForeColor=AppTheme.Muted,AutoSize=true,MaximumSize=new Size(175,0)});
             var done=new Button {Text="✓  Xác nhận tất cả",Width=170,Height=34};AppTheme.Button(done,true);
+            done.Enabled=FunctionPolicy.Can(user,"service.manage");
             done.Click+=async (_,_)=>await Run(async()=>
             {
                 if(Ui.Confirm(this,$"Xác nhận đã giao tất cả dịch vụ của {stay.Guest}?"))await Changed(()=>service.DeliverAsync(stay));
             });
             var cancel=new Button {Text="×  Hủy tất cả",Width=170,Height=34};AppTheme.Button(cancel);
             cancel.ForeColor=Color.FromArgb(185,62,78);
+            cancel.Enabled=FunctionPolicy.Can(user,"service.manage");
             cancel.Click+=async (_,_)=>await Run(async()=>
             {
                 if(!Ui.Confirm(this,$"Hủy toàn bộ phần dịch vụ chưa giao của {stay.Guest}? Phần đã giao vẫn được tính tiền."))return;
@@ -298,6 +322,7 @@ public partial class ucDashboard : UserControl
         if(revenueOverview is null)
         {
             revenueOverview=new RevenueOverview {Dock=DockStyle.Fill};
+            revenueOverview.CanViewDetails=FunctionPolicy.Can(user,"invoice.list");
             revenueOverview.PeriodChanged+=async (_,_)=>await Run(Reload);
             revenueOverview.DetailsRequested+=async (_,_)=>await Run(ShowInvoices);
             pnlChartContainer.Controls.Add(revenueOverview);
@@ -322,24 +347,25 @@ public partial class ucDashboard : UserControl
     });
     private async void dgvDatCoc_CellContentClick(object? sender,DataGridViewCellEventArgs e)
     {
-        if(!RolePolicy.CanOperate(user.Role) || e.RowIndex<0 || e.ColumnIndex<0 || dgvDatCoc.Rows[e.RowIndex].DataBoundItem is not BookingRow row)return;
+        if(e.RowIndex<0 || e.ColumnIndex<0 || dgvDatCoc.Rows[e.RowIndex].DataBoundItem is not BookingRow row)return;
         var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id);if(stay==null)return;
         var column=dgvDatCoc.Columns[e.ColumnIndex].Name;
-        if(column=="checkin")await Run(async()=> {if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))await Changed(()=>service.CheckInAsync(stay));});
-        if(column=="cancel")await Run(()=>ShowCancel(stay));
-        if(column=="edit")await Run(()=>ShowEditBooking(stay));
+        if(column=="checkin" && FunctionPolicy.Can(user,"room.checkin"))await Run(async()=> {if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))await Changed(()=>service.CheckInAsync(stay));});
+        if(column=="cancel" && FunctionPolicy.Can(user,"room.booking_cancel"))await Run(()=>ShowCancel(stay));
+        if(column=="edit" && FunctionPolicy.Can(user,"room.booking_edit"))await Run(()=>ShowEditBooking(stay));
     }
     private async void dgvLichTrinh_CellContentClick(object? sender,DataGridViewCellEventArgs e)
     {
-        if(!RolePolicy.CanOperate(user.Role) || e.RowIndex<0 || e.ColumnIndex<0 || dgvLichTrinh.Columns[e.ColumnIndex].Name!="action" || dgvLichTrinh.Rows[e.RowIndex].DataBoundItem is not ScheduleRow row)return;
+        if(e.RowIndex<0 || e.ColumnIndex<0 || dgvLichTrinh.Columns[e.ColumnIndex].Name!="action" || dgvLichTrinh.Rows[e.RowIndex].DataBoundItem is not ScheduleRow row)return;
         var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id);
         if(stay!=null)await Run(async()=>
         {
             if(stay.Status==StayStatus.Reserved)
             {
+                FunctionPolicy.Require(user,"room.checkin");
                 if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))await Changed(()=>service.CheckInAsync(stay));
             }
-            else await ShowCheckout(stay);
+            else {FunctionPolicy.Require(user,"room.checkout");await ShowCheckout(stay);}
         });
     }
 }

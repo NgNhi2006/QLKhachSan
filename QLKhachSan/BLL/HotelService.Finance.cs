@@ -1,14 +1,16 @@
 using QLKhachSan.DAL;
 using QLKhachSan.DTO;
+using System.Runtime.CompilerServices;
 
 namespace QLKhachSan.BLL;
 
 public sealed partial class HotelService
 {
-    private Task<T> FinanceWrite<T>(Func<HotelTransaction,Task<T>> action) => repository.RunAsync(true,async db=>
+    private Task<T> FinanceWrite<T>(Func<HotelTransaction,Task<T>> action,[CallerMemberName]string caller="") => repository.RunAsync(true,async db=>
     {
         await db.RequireUserAsync(user);
         if(user.Role is not ("Admin" or "Accountant" or "Manager")) throw new BusinessException("Chỉ Kế toán hoặc Quản lý được ghi sổ.");
+        FunctionPolicy.RequireMethod(user,caller);
         return await action(db);
     });
     private static string Required(string value,int max,string label)
@@ -26,6 +28,7 @@ public sealed partial class HotelService
     public Task<long> OpenCashShiftAsync(decimal opening) => repository.RunAsync(true,async db=>
     {
         await db.RequireUserAsync(user);
+        FunctionPolicy.Require(user,"shift.manage");
         if(user.Role is not ("Admin" or "Reception" or "Accountant" or "Manager"))throw new BusinessException("Không có quyền mở ca.");
         if(opening<0 || opening>1_000_000_000_000m)throw new BusinessException("Tiền đầu ca không hợp lệ.");
         await db.RequireOpenPeriodAsync(await db.NowAsync());
@@ -36,6 +39,7 @@ public sealed partial class HotelService
     public Task SubmitCashShiftAsync(long id,decimal counted,string explanation) => repository.RunAsync(true,async db=>
     {
         await db.RequireUserAsync(user);
+        FunctionPolicy.Require(user,"shift.manage");
         if(user.Role is not ("Admin" or "Reception" or "Accountant" or "Manager"))throw new BusinessException("Không có quyền chốt ca.");
         if(counted<0 || counted>1_000_000_000_000m)throw new BusinessException("Tiền đếm thực tế không hợp lệ.");
         var shift=await db.ShiftIdentityAsync(id);
@@ -149,6 +153,7 @@ public sealed partial class HotelService
         return await db.AuditAsync(user,"DebtAllocation",$"Nợ {debtId}; phiếu {voucherId}; {amount:N0}");
     });
     public Task<List<StockItem>> StockAsync() => FinanceRead(db=>db.StockAsync());
+    public Task<List<ServiceItem>> StockLinkableServicesAsync() => FinanceRead(db=>db.MenuAsync());
     public Task<List<StockMovement>> StockMovementsAsync(DateTime from,DateTime through) => FinanceRead(db=>db.StockMovementsAsync(from.Date,through.Date.AddDays(1)));
     public Task<List<MinibarReconciliation>> ReconcileMinibarAsync(DateTime from,DateTime through) => FinanceRead(db=>db.ReconcileMinibarAsync(from.Date,through.Date.AddDays(1)));
     public Task AddStockItemAsync(string name,string unit,int? serviceId,decimal reorder) => FinanceWrite(async db=>
@@ -179,6 +184,7 @@ public sealed partial class HotelService
     });
     public Task<FinanceSummary> FinanceSummaryAsync(DateTime from,DateTime through) => FinanceRead(db=>db.FinanceSummaryAsync(from.Date,through.Date.AddDays(1)));
     public Task<List<BillShareView>> BillSharesAsync() => FinanceRead(db=>db.BillSharesAsync());
+    public Task<List<Invoice>> GroupInvoicesAsync(long groupId) => FinanceRead(db=>db.GroupInvoicesAsync(groupId));
     public Task VoidInvoiceAsync(long invoice,string code,string explanation) => FinanceWrite(async db=>
     {
         if(code is not ("GuestCancelled" or "WrongRoomType" or "RoomChange"))throw new BusinessException("Lý do hủy không hợp lệ.");

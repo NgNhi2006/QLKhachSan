@@ -16,7 +16,7 @@ internal sealed class AccountingForm : Form
     private readonly Label summary=new() {Dock=DockStyle.Fill,Font=new Font("Segoe UI",10,FontStyle.Bold),Padding=new Padding(12,6,4,0)};
     private bool loading;
 
-    public AccountingForm(UserSession user)
+    public AccountingForm(UserSession user, string? initialTab = null)
     {
         this.user=user;service=new HotelService(new HotelRepository(),user);
         Text="Tài chính - Kế toán";Size=new Size(1280,820);MinimumSize=new Size(950,650);
@@ -31,17 +31,16 @@ internal sealed class AccountingForm : Form
         AddButton(bar,"Làm mới",async()=>await RefreshAll());
         AddButton(bar,"Xuất Excel",()=>{ExcelExport.ExportGrid(this,grids[tabs.SelectedTab!.Text],tabs.SelectedTab.Text,DateTime.Now);return Task.CompletedTask;});
         root.Controls.Add(bar,0,0);root.Controls.Add(tabs,0,1);root.Controls.Add(summary,0,2);Controls.Add(root);
-        AddTab("Ca trực",BuildShiftTab);
-        if(RolePolicy.CanViewFinance(user.Role))
-        {
-            AddTab("Sổ quỹ",BuildVoucherTab);
-            AddTab("Đối soát ngân hàng",BuildBankTab);
-            AddTab("Công nợ",BuildDebtTab);
-            AddTab("Kho minibar",BuildStockTab);
-            AddTab("Hóa đơn",BuildInvoiceTab);
-            AddTab("Nhóm bill",BuildBillGroupTab);
-            AddTab("Lãi lỗ",BuildProfitTab);
-        }
+        if(FunctionPolicy.Can(user,"shift.manage"))AddTab("Ca trực",BuildShiftTab);
+        if(FunctionPolicy.Can(user,"cash.book"))AddTab("Sổ quỹ",BuildVoucherTab);
+        if(FunctionPolicy.Can(user,"cash.bank"))AddTab("Đối soát ngân hàng",BuildBankTab);
+        if(FunctionPolicy.Can(user,"cash.debt"))AddTab("Công nợ",BuildDebtTab);
+        if(FunctionPolicy.Can(user,"service.stock"))AddTab("Kho minibar",BuildStockTab);
+        if(FunctionPolicy.Can(user,"invoice.control"))AddTab("Hóa đơn",BuildInvoiceTab);
+        if(FunctionPolicy.Can(user,"invoice.groups"))AddTab("Nhóm bill",BuildBillGroupTab);
+        if(FunctionPolicy.Can(user,"report.profit"))AddTab("Lãi lỗ",BuildProfitTab);
+        if(initialTab is not null && tabs.TabPages.Cast<TabPage>().FirstOrDefault(x=>x.Text==initialTab) is { } selected)
+            tabs.SelectedTab=selected;
         Shown+=async (_,_)=>await RefreshAll();
     }
     private void AddTab(string title,Action<FlowLayoutPanel> actions)
@@ -71,29 +70,48 @@ internal sealed class AccountingForm : Form
         try
         {
             if(through.Value.Date<from.Value.Date || through.Value.Date-from.Value.Date>TimeSpan.FromDays(366))throw new BusinessException("Khoảng báo cáo tối đa 367 ngày.");
-            var shifts=await service.CashShiftsAsync(from.Value,through.Value);
-            Bind("Ca trực",shifts.Select(x=>new {x.Id,NhânViên=x.Cashier,MởCa=x.OpenedAt,ĐóngCa=x.ClosedAt,TrạngThái=x.Status switch {"Open"=>"Đang mở","Submitted"=>"Đã bàn giao","Locked"=>"Đã khóa",_=>x.Status},ĐầuCa=x.OpeningCash,ThuTiềnMặt=x.CashIn,ChiTiềnMặt=x.CashOut,POS=x.Pos,ChuyểnKhoản=x.Bank,OTA=x.Ota,LýThuyết=x.ExpectedCash,ThựcĐếm=x.CountedCash,ChênhLệch=x.Status=="Open"?null:(decimal?)x.Discrepancy,GiảiTrình=x.Explanation}).ToList());
-            if(RolePolicy.CanViewFinance(user.Role))
+            summary.Text=$"Đang xem: {tabs.SelectedTab?.Text}";
+            if(grids.ContainsKey("Ca trực"))
+            {
+                var shifts=await service.CashShiftsAsync(from.Value,through.Value);
+                Bind("Ca trực",shifts.Select(x=>new {x.Id,NhânViên=x.Cashier,MởCa=x.OpenedAt,ĐóngCa=x.ClosedAt,TrạngThái=x.Status switch {"Open"=>"Đang mở","Submitted"=>"Đã bàn giao","Locked"=>"Đã khóa",_=>x.Status},ĐầuCa=x.OpeningCash,ThuTiềnMặt=x.CashIn,ChiTiềnMặt=x.CashOut,POS=x.Pos,ChuyểnKhoản=x.Bank,OTA=x.Ota,LýThuyết=x.ExpectedCash,ThựcĐếm=x.CountedCash,ChênhLệch=x.Status=="Open"?null:(decimal?)x.Discrepancy,GiảiTrình=x.Explanation}).ToList());
+            }
+            if(grids.ContainsKey("Sổ quỹ"))
             {
                 var vouchers=await service.VouchersAsync(from.Value,through.Value);
                 Bind("Sổ quỹ",vouchers.Select(x=>new {x.Id,Ngày=x.PostedAt,Loại=x.Type,Kênh=x.Channel,HạngMục=x.Category,SốTiền=x.Amount,ĐốiTượng=x.Counterparty,MãGiaoDịch=x.Reference,DiễnGiải=x.Note,NhânViên=x.Username,Hủy=x.Reversed}).ToList());
                 var book=await service.BookAsync("Cash",from.Value,through.Value);
                 var bankBook=await service.BookAsync("Bank",from.Value,through.Value);
+                summary.Text=$"Quỹ tiền mặt: {book.Closing:N0} VNĐ  |  Ngân hàng: {bankBook.Closing:N0} VNĐ";
+            }
+            if(grids.ContainsKey("Đối soát ngân hàng"))
+            {
                 var bankLines=await service.BankLinesAsync(from.Value,through.Value);
                 Bind("Đối soát ngân hàng",bankLines.Select(x=>new {x.Id,Ngày=x.OccurredAt,Kênh=x.Channel,MãGiaoDịch=x.Reference,SốTiền=x.Amount,ThanhToán=x.PaymentId,Phiếu=x.VoucherId,x.Status}).ToList());
+            }
+            if(grids.ContainsKey("Công nợ"))
+            {
                 var debts=await service.DebtsAsync();
                 Bind("Công nợ",debts.Select(x=>new {x.Id,Loại=x.Type,ĐốiTượng=x.Counterparty,HóaĐơn=x.InvoiceId,NgàyGhi=x.IssuedAt,Hạn=x.DueAt,SốGốc=x.Amount,ĐãTrả=x.Paid,CònLại=x.Outstanding,TuổiNợ=x.AgeBucket(DateTime.Today),DiễnGiải=x.Note}).ToList());
+            }
+            if(grids.ContainsKey("Kho minibar"))
+            {
                 var stock=await service.StockAsync();var reconciliation=await service.ReconcileMinibarAsync(from.Value,through.Value);
                 Bind("Kho minibar",stock.Select(x=>new {x.Id,DịchVụ=x.ServiceId,Tên=x.Name,ĐơnVị=x.Unit,Tồn=x.Quantity,GiáVốnBìnhQuân=x.AverageCost,NgưỡngNhập=x.ReorderLevel,CảnhBáo=x.Quantity<=x.ReorderLevel,BánTrênBill=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.Billed??0,BuồngPhòngBáo=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.Housekeeping??0,XuấtKhoBán=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.BookSold??0}).ToList());
+            }
+            if(grids.ContainsKey("Hóa đơn"))
+            {
                 var report=await service.AllFinanceInvoicesAsync(from.Value,through.Value);
                 var controls=(await service.InvoiceControlsAsync(from.Value,through.Value)).ToDictionary(x=>x.Id);
                 Bind("Hóa đơn",report.Select(x=>new {x.Id,Ngày=x.Issued,Phòng=x.Room,Khách=x.Guest,TiềnPhòng=x.RoomCharge,DịchVụ=x.ServiceCharge,Tổng=x.Total,Cọc=x.Deposit,ThuThêm=x.Collected,Hoàn=x.Refunded,Kênh=x.Method,TrạngThái=controls[x.Id].Voided?"Đã hủy":"Có hiệu lực",GiảmTrừ=controls[x.Id].Adjustments,VAT=controls[x.Id].VatRate,PhíPhụcVụ=controls[x.Id].ServiceRate,HóaĐơnĐiệnTử=controls[x.Id].EInvoiceNumber}).ToList());
+            }
+            if(grids.ContainsKey("Nhóm bill"))
                 Bind("Nhóm bill",(await service.BillSharesAsync()).Select(x=>new {MãNhóm=x.GroupId,Đoàn=x.GroupName,HóaĐơn=x.InvoiceId,NgườiTrả=x.Payer,SốTiền=x.Amount,NgàyTạo=x.CreatedAt}).ToList());
+            if(grids.ContainsKey("Lãi lỗ"))
+            {
                 var pnl=await service.FinanceSummaryAsync(from.Value,through.Value);
                 Bind("Lãi lỗ",new[]{new {DoanhThuPhòng=pnl.RoomRevenue,Minibar=pnl.MinibarRevenue,DịchVụKhác=pnl.OtherRevenue,GiảmTrừ=pnl.Discounts,DoanhThuThuần=pnl.NetRevenue,GiáVốn=pnl.CostOfGoods,ChiPhíVậnHành=pnl.OperatingExpenses,LợiNhuậnGộp=pnl.GrossProfit,PhòngĐêmBán=pnl.RoomNightsSold,PhòngĐêmSẵnCó=pnl.RoomNightsAvailable,ADR=pnl.Adr,RevPAR=pnl.RevPar,LấpĐầyPhầnTrăm=pnl.Occupancy}}.ToList());
-                summary.Text=$"Quỹ tiền mặt: {book.Opening:N0} + {book.Receipts:N0} - {book.Payments:N0} = {book.Closing:N0} VNĐ  |  Ngân hàng: {bankBook.Opening:N0} + {bankBook.Receipts:N0} - {bankBook.Payments:N0} = {bankBook.Closing:N0} VNĐ  |  Nợ đến hạn: {debts.Count(x=>x.Outstanding>0 && x.DueAt.Date<=DateTime.Today):N0}";
             }
-            else summary.Text="Ca trực cá nhân • tiền mặt cần nhập số đếm thực tế khi bàn giao.";
         }
         catch(Exception ex){Ui.Error(this,ex);}finally{loading=false;}
     }
@@ -195,23 +213,32 @@ internal sealed class AccountingForm : Form
     }
     private void BuildStockTab(FlowLayoutPanel actions)
     {
-        AddButton(actions,"Thêm mặt hàng",()=>
+        AddButton(actions,"Thêm mặt hàng",async()=>
         {
-            using var d=Dialog("Mặt hàng kho");var name=Ui.Text(150);var unit=Ui.Text(30);var serviceId=Ui.Text(20);var reorder=Ui.Money();
-            d.Add("Tên mặt hàng",name);d.Add("Đơn vị",unit);d.Add("Mã dịch vụ liên kết",serviceId);d.Add("Ngưỡng nhập",reorder);
-            d.Action("LƯU",async()=>{int? id=string.IsNullOrWhiteSpace(serviceId.Text)?null:int.Parse(serviceId.Text);await service.AddStockItemAsync(name.Text,unit.Text,id,reorder.Value);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
+            var services=await service.StockLinkableServicesAsync();
+            using var d=Dialog("Mặt hàng kho");var name=Ui.Text(150);var unit=Ui.Text(30);
+            var choices=new[]{new Choice("","Không liên kết dịch vụ")}
+                .Concat(services.Select(x=>new Choice(x.Id.ToString(),$"{x.Category} / {x.Name}"))).ToArray();
+            var linkedService=Ui.Combo(choices);var reorder=Ui.Money();
+            d.Add("Tên mặt hàng",name);d.Add("Đơn vị",unit);d.Add("Dịch vụ liên kết (nếu có)",linkedService);d.Add("Ngưỡng cảnh báo nhập thêm",reorder);
+            d.Action("LƯU",async()=>{var code=((Choice)linkedService.SelectedItem!).Code;
+                await service.AddStockItemAsync(name.Text,unit.Text,code.Length==0?null:int.Parse(code),reorder.Value);await RefreshAll();});d.ShowDialog(this);
         });
-        AddButton(actions,"Nhập / xuất kho",()=>
+        AddButton(actions,"Nhập / xuất kho",async()=>
         {
-            using var d=Dialog("Biến động kho");var item=Ui.Number(int.MaxValue);var kind=Ui.Combo(new[]{new Choice("Purchase","Nhập mua"),new Choice("Spoilage","Xuất hủy/hư hỏng"),new Choice("Internal","Xuất dùng nội bộ"),new Choice("Adjustment","Điều chỉnh tăng tồn")});var quantity=Ui.Money();var cost=Ui.Money();var reason=Ui.Text(500);
-            d.Add("Mã hàng",item);d.Add("Loại",kind);d.Add("Số lượng",quantity);d.Add("Đơn giá vốn (khi nhập)",cost);d.Add("Lý do",reason);
-            d.Action("GHI KHO",async()=>{await service.MoveStockAsync((int)item.Value,((Choice)kind.SelectedItem!).Code,quantity.Value,cost.Value,reason.Text);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
+            var stock=await service.StockAsync();if(stock.Count==0)throw new BusinessException("Hãy thêm mặt hàng trước khi nhập hoặc xuất kho.");
+            using var d=Dialog("Biến động kho");var item=Ui.Combo(stock.Select(x=>new Choice(x.Id.ToString(),$"{x.Name} · tồn {x.Quantity:N0} {x.Unit}")).ToArray());
+            var kind=Ui.Combo(new[]{new Choice("Purchase","Nhập mua"),new Choice("Spoilage","Xuất hủy/hư hỏng"),new Choice("Internal","Xuất dùng nội bộ"),new Choice("Adjustment","Điều chỉnh tăng tồn")});var quantity=Ui.Money();var cost=Ui.Money();var reason=Ui.Text(500);
+            d.Add("Mặt hàng",item);d.Add("Loại giao dịch",kind);d.Add("Số lượng",quantity);d.Add("Đơn giá vốn (khi nhập mua)",cost);d.Add("Lý do",reason);
+            d.Action("GHI KHO",async()=>{await service.MoveStockAsync(int.Parse(((Choice)item.SelectedItem!).Code),((Choice)kind.SelectedItem!).Code,quantity.Value,cost.Value,reason.Text);await RefreshAll();});d.ShowDialog(this);
         });
-        AddButton(actions,"Buồng phòng báo dùng",()=>
+        AddButton(actions,"Buồng phòng báo dùng",async()=>
         {
-            using var d=Dialog("Báo tiêu thụ buồng phòng");var item=Ui.Number(int.MaxValue);var stay=Ui.Text(30);var quantity=Ui.Money();var note=Ui.Text(300);
-            d.Add("Mã hàng",item);d.Add("Mã lượt ở",stay);d.Add("Số lượng",quantity);d.Add("Ghi chú",note);
-            d.Action("BÁO DÙNG",async()=>{long? id=string.IsNullOrWhiteSpace(stay.Text)?null:long.Parse(stay.Text);await service.ReportHousekeepingAsync((int)item.Value,id,quantity.Value,note.Text);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
+            var stock=await service.StockAsync();if(stock.Count==0)throw new BusinessException("Kho chưa có mặt hàng.");
+            using var d=Dialog("Báo tiêu thụ buồng phòng");var item=Ui.Combo(stock.Select(x=>new Choice(x.Id.ToString(),$"{x.Name} · tồn {x.Quantity:N0} {x.Unit}")).ToArray());
+            var stay=Ui.Text(30);var quantity=Ui.Money();var note=Ui.Text(300);
+            d.Add("Mặt hàng",item);d.Add("Mã lượt ở (để trống nếu chưa xác định)",stay);d.Add("Số lượng",quantity);d.Add("Ghi chú",note);
+            d.Action("BÁO DÙNG",async()=>{long? id=string.IsNullOrWhiteSpace(stay.Text)?null:long.Parse(stay.Text);await service.ReportHousekeepingAsync(int.Parse(((Choice)item.SelectedItem!).Code),id,quantity.Value,note.Text);await RefreshAll();});d.ShowDialog(this);
         });
     }
     private void BuildInvoiceTab(FlowLayoutPanel actions)
@@ -235,13 +262,6 @@ internal sealed class AccountingForm : Form
             d.Add("Mã hóa đơn",id);d.Add("Số hóa đơn điện tử",number);d.Add("VAT %",vat);d.Add("Phí phục vụ %",fee);d.Add("Làm tròn VNĐ",round);
             d.Action("GHI NHẬN",async()=>{await service.MarkEInvoiceAsync((long)id.Value,number.Text,decimal.Parse((string)vat.SelectedItem!),decimal.Parse((string)fee.SelectedItem!),int.Parse((string)round.SelectedItem!));await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
         });
-        AddButton(actions,"Tách / gộp nhóm bill",()=>
-        {
-            using var d=Dialog("Tách / gộp phần thanh toán");var name=Ui.Text(150);var lines=new TextBox {Multiline=true,ScrollBars=ScrollBars.Vertical,Height=130,Dock=DockStyle.Top};
-            d.Add("Tên đoàn / hóa đơn tổng",name);d.Add("Mỗi dòng: mã hóa đơn; người trả; số tiền",lines,130);
-            d.Note("Mỗi hóa đơn phải được phân bổ đủ tổng tiền. Nhiều dòng cùng mã là tách; nhiều mã trong một nhóm là gộp.");
-            d.Action("TẠO NHÓM",async()=>{var shares=lines.Lines.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>{var p=x.Split(';');if(p.Length!=3)throw new BusinessException("Mỗi dòng cần 3 trường cách nhau bởi dấu ;.");return (long.Parse(p[0]),p[1],decimal.Parse(p[2]));}).ToList();await service.GroupBillsAsync(name.Text,shares);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
-        });
     }
     private void BuildProfitTab(FlowLayoutPanel actions)
     {
@@ -249,7 +269,46 @@ internal sealed class AccountingForm : Form
     }
     private void BuildBillGroupTab(FlowLayoutPanel actions)
     {
-        AddButton(actions,"Tạo từ tab Hóa đơn",()=>{tabs.SelectedTab=tabs.TabPages.Cast<TabPage>().Single(x=>x.Text=="Hóa đơn");return Task.CompletedTask;});
+        AddButton(actions,"Tách / gộp nhóm bill",()=>
+        {
+            using var d=Dialog("Tách / gộp phần thanh toán");var name=Ui.Text(150);var lines=new TextBox {Multiline=true,ScrollBars=ScrollBars.Vertical,Height=130,Dock=DockStyle.Top};
+            d.Add("Tên đoàn / hóa đơn tổng",name);d.Add("Mỗi dòng: mã hóa đơn; người trả; số tiền",lines,130);
+            d.Note("Mỗi hóa đơn phải được phân bổ đủ tổng tiền. Nhiều dòng cùng mã là tách; nhiều mã trong một nhóm là gộp.");
+            d.Action("TẠO NHÓM",async()=>{var shares=lines.Lines.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>{var p=x.Split(';');if(p.Length!=3)throw new BusinessException("Mỗi dòng cần 3 trường cách nhau bởi dấu ;.");return (long.Parse(p[0]),p[1],decimal.Parse(p[2]));}).ToList();await service.GroupBillsAsync(name.Text,shares);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
+        });
+        AddButton(actions,"Xem / in phiếu tổng",async()=>
+        {
+            var grid=grids["Nhóm bill"];
+            if(grid.CurrentRow?.Cells["MãNhóm"].Value is not long groupId)throw new BusinessException("Chọn một dòng thuộc nhóm cần in.");
+            var invoices=await service.GroupInvoicesAsync(groupId);
+            if(invoices.Count==0)throw new BusinessException("Nhóm không còn hóa đơn có hiệu lực.");
+            var shares=(await service.BillSharesAsync()).Where(x=>x.GroupId==groupId).ToList();
+            using var document=new System.Drawing.Printing.PrintDocument {DocumentName=$"Phiếu thanh toán tổng #{groupId}"};
+            document.PrintPage+=(_,e)=>
+            {
+                if(e.Graphics is null)return;
+                using var title=new Font("Segoe UI Semibold",19,FontStyle.Bold);
+                using var body=new Font("Segoe UI",10);using var bold=new Font("Segoe UI Semibold",10,FontStyle.Bold);
+                var g=e.Graphics;var x=e.MarginBounds.Left;var y=e.MarginBounds.Top;var w=e.MarginBounds.Width;
+                g.DrawString(AppSettings.Load().HotelName,title,Brushes.Black,x,y);y+=45;
+                g.DrawString($"PHIẾU THANH TOÁN TỔNG  #{groupId}",bold,Brushes.Black,x,y);y+=28;
+                g.DrawString($"{shares.FirstOrDefault()?.GroupName}  •  Lập lúc {shares.FirstOrDefault()?.CreatedAt:dd/MM/yyyy HH:mm}",body,Brushes.Black,x,y);y+=35;
+                g.DrawLine(Pens.Gray,x,y,x+w,y);y+=12;
+                foreach(var invoice in invoices)
+                {
+                    g.DrawString($"P.{invoice.Room}  •  {invoice.Guest}  •  HĐ #{invoice.Id}",body,Brushes.Black,x,y);
+                    g.DrawString($"{invoice.Total:N0} đ",body,Brushes.Black,x+w-135,y);y+=27;
+                }
+                g.DrawLine(Pens.Gray,x,y,x+w,y);y+=16;
+                g.DrawString($"Tổng tiền: {invoices.Sum(x=>x.Total):N0} đ",bold,Brushes.Black,x,y);y+=28;
+                g.DrawString($"Cọc: {invoices.Sum(x=>x.Deposit):N0} đ  •  Thu thêm: {invoices.Sum(x=>x.Collected):N0} đ  •  Hoàn: {invoices.Sum(x=>x.Refunded):N0} đ",body,Brushes.Black,x,y);y+=45;
+                g.DrawString("Thu ngân",bold,Brushes.Black,x+65,y);g.DrawString("Khách hàng",bold,Brushes.Black,x+w-170,y);
+                g.DrawString("Phiếu thanh toán nội bộ, không phải hóa đơn GTGT.",body,Brushes.Gray,x,e.MarginBounds.Bottom-28);
+            };
+            using var preview=new PrintPreviewDialog {Document=document,Width=980,Height=780};preview.ShowDialog(this);
+        });
+        if(tabs.TabPages.Cast<TabPage>().FirstOrDefault(x=>x.Text=="Hóa đơn") is { } invoiceTab)
+            AddButton(actions,"Mở tab Hóa đơn",()=>{tabs.SelectedTab=invoiceTab;return Task.CompletedTask;});
     }
     private void PrintSelected(string title) => PrintGrid(title,false);
     private void PrintGrid(string title,bool all)

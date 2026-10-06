@@ -14,11 +14,9 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
-    <EmbeddedResource Include="../Database/MigrateV2.sql" LogicalName="QLKhachSan.MigrateV2.sql" />
-    <EmbeddedResource Include="../Database/MigrateV3.sql" LogicalName="QLKhachSan.MigrateV3.sql" />
-    <EmbeddedResource Include="../Database/MigrateV4.sql" LogicalName="QLKhachSan.MigrateV4.sql" />
-    <EmbeddedResource Include="../Database/MigrateV5.sql" LogicalName="QLKhachSan.MigrateV5.sql" />
-    <EmbeddedResource Include="../Database/MigrateV6.sql" LogicalName="QLKhachSan.MigrateV6.sql" />
+    <EmbeddedResource Include="../Database/Database.sql" LogicalName="QLKhachSan.Database.sql" />
+    <EmbeddedResource Update="Assets/hotel-room.jpg" LogicalName="QLKhachSan.Assets.hotel-room.jpg" />
+    <EmbeddedResource Include="Assets/hotel-room.jpg" LogicalName="QLKhachSan.Assets.hotel-room.jpg" />
   </ItemGroup>
 
 </Project>

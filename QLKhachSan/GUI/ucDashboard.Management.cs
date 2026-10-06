@@ -9,11 +9,17 @@ public partial class ucDashboard
         var button=new Button {Text=title,Width=190,Height=38,Location=new Point(10,y)};
         button.Click+=async (_,_)=>await Run(action);pnlLeftTools.Controls.Add(button);
     }
-    private Task ShowDeposit()
+    private Task ShowDeposit() => ShowDeposit(null);
+    private Task ShowDeposit(Stay? preselected)
     {
         using var dialog=new InputDialog("Thu cọc bổ sung",760,Math.Min(660,Screen.FromControl(this).WorkingArea.Height-30));
         var choice=Ui.Combo(data.Stays.Where(s=>s.Status==StayStatus.Reserved).Select(s=>new StayChoice(s,$"#{s.Id} • P.{StayRoom(s)?.Number} • {s.Guest} • Đã cọc {s.Deposit:N0} đ")));
         if(choice.Items.Count==0)throw new BusinessException("Không có lượt đặt trước chờ nhận phòng để thu cọc.");
+        if(preselected is not null)
+        {
+            choice.SelectedItem=choice.Items.Cast<StayChoice>().FirstOrDefault(x=>x.Stay.Id==preselected.Id);
+            choice.Enabled=false;
+        }
         var amount=Ui.Money();var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS"});var reference=Ui.Text(100);
         var summary=new Label {AutoSize=true,MinimumSize=new Size(0,56),MaximumSize=new Size(680,0),BackColor=AppTheme.Canvas,ForeColor=AppTheme.Ink,Padding=new Padding(12,8,8,6)};
         void UpdateSummary()

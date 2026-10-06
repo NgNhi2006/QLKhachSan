@@ -153,7 +153,7 @@ internal sealed class InputDialog : Form
     }
     public Button Action(string text,Func<Task> save,bool close=true)
     {
-        var button=new Button { Text=text,Height=44,Dock=DockStyle.Top,BackColor=Color.FromArgb(37,99,235),ForeColor=Color.White,FlatStyle=FlatStyle.Flat };
+        var button=new Button { Text=text,Height=44,Dock=DockStyle.Top,BackColor=AppTheme.Blue,ForeColor=Color.White,FlatStyle=FlatStyle.Flat };
         AppTheme.Button(button,true);
         button.Click+=async (_,_)=>
         {

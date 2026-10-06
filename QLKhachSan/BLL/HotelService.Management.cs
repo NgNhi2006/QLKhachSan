@@ -22,6 +22,8 @@ public sealed partial class HotelService
         return stay.HoldUntil<=await db.NowAsync()?0:stay.Deposit;
     });
     public Task<List<Stay>> StayHistoryAsync(string search) => OperationsRead(db=>db.StayHistoryAsync(search.Trim()));
+    public Task<CustomerDepositHistory> DepositHistoryAsync(int customerId) => OperationsRead(db=>db.DepositHistoryAsync(customerId));
+    public Task<List<DepositReceipt>> DepositReceiptsAsync(DateTime from,DateTime through) => FinanceRead(db=>db.DepositReceiptsAsync(from.Date,through.Date.AddDays(1)));
     public Task<List<TodayScheduleItem>> TodayScheduleAsync(DateTime day) => OperationsRead(db=>db.TodayScheduleAsync(day));
     public Task<List<ServiceLine>> StayOrdersAsync(long stay) => OperationsRead(db=>db.AllOrdersAsync(stay));
     public Task UpdateBookingAsync(Stay selected,Room target,GuestInput guest,DateTime arrival,int days,DateTime receiveBy,string reason) => Write(async db=>
@@ -130,13 +132,23 @@ public sealed partial class HotelService
         if(await db.SaveRoomAsync(room)!=1) throw new BusinessException("Phòng đã thay đổi. Hãy mở lại.");
         return await db.AuditAsync(user,"RoomCatalog",$"Phòng {room.Number}; giá {room.Rate}; cọc gợi ý {room.Deposit}");
     });
+    public Task DeleteRoomAsync(Room selected) => CatalogWrite(async db=>
+    {
+        if(selected.Id<=0)throw new BusinessException("Chọn phòng cần xóa.");
+        var current=await db.RoomAsync(selected.Id);
+        RoomUnchanged(current,selected,selected.Status);
+        if(await db.RoomHistoryCountAsync(current.Id)>0)
+            throw new BusinessException("Phòng đã có lịch sử đặt hoặc lưu trú. Không thể xóa; hãy giữ phòng để bảo toàn lịch sử và hóa đơn.");
+        if(await db.DeleteRoomAsync(current)!=1)throw new BusinessException("Phòng đã thay đổi. Hãy tải lại danh sách.");
+        return await db.AuditAsync(user,"DeleteRoom",$"Xóa phòng {current.Number} (mã {current.Id})");
+    });
     public Task UpdateRoomsAsync(IReadOnlyList<Room> selected,decimal? rate,decimal? deposit,string? type) => CatalogWrite(async db=>
     {
         if(selected.Count==0 || selected.Count>200 || selected.Select(r=>r.Id).Distinct().Count()!=selected.Count) throw new BusinessException("Chọn các phòng cần cập nhật.");
         if(rate is null && deposit is null && type is null) throw new BusinessException("Chọn ít nhất một thông tin cần thay đổi.");
         if(rate is { } newRate){ValidateMoney(newRate);if(newRate==0)throw new BusinessException("Giá phòng phải lớn hơn 0.");}
         if(deposit is { } newDeposit)ValidateMoney(newDeposit);
-        if(type is not null && type is not ("Đơn" or "Đôi" or "VIP")) throw new BusinessException("Loại phòng không hợp lệ.");
+        if(type is not null && type is not ("Đơn" or "Đôi" or "VIP" or "Tình nhân")) throw new BusinessException("Loại phòng không hợp lệ.");
         var active=(await db.ActiveStaysAsync()).Select(s=>s.RoomId).ToHashSet();
         foreach(var original in selected)
         {

@@ -64,13 +64,19 @@ public partial class ucDashboard
         method.SelectedIndexChanged+=(_,_)=>UpdatePayment();UpdatePayment();
         dialog.FormClosed+=(_,_)=>qr.CancelAsync();
         var confirm=new CheckBox {Text="Đã thu đủ tiền / hoàn đủ tiền cho khách"};dialog.AddActionConfirmation("Xác nhận thu chi",confirm);
-        dialog.Action("HOÀN TẤT CHECK-OUT",async()=>
+        var checkoutAction=dialog.Action("HOÀN TẤT CHECK-OUT",async()=>
         {
             if(!confirm.Checked)throw new BusinessException("Cần xác nhận đã hoàn tất thu/hoàn tiền.");
             long invoiceId=0;
             await Changed(async()=>invoiceId=await service.CheckoutAsync(bill,(string)method.SelectedItem!,reference.Text));
             MessageBox.Show(dialog,$"Đã lưu hóa đơn #{invoiceId}. Phòng chuyển sang đang dọn.","Hoàn tất");
         });
+        if(data.Stays.Count(x=>x.CustomerId==stay.CustomerId && x.Status==StayStatus.Occupied)>1)
+            dialog.Action("THANH TOÁN CÁC PHÒNG CÙNG KHÁCH",async()=>
+            {
+                if(await ShowGroupCheckout(stay))dialog.Close();
+            },false);
+        dialog.AcceptButton=checkoutAction;
         dialog.ShowDialog(this);
     }
     private async void btnQuanLyKhach_Click(object? sender,EventArgs e)=>await Run(async()=>
@@ -175,12 +181,25 @@ public partial class ucDashboard
         var refunds=Metric("HOÀN CỌC",2);var forfeits=Metric("CỌC KHÔNG HOÀN",3);var netCash=Metric("DÒNG TIỀN THUẦN",4);
         var tabs=new TabControl {Dock=DockStyle.Fill,Margin=new Padding(22,4,22,8),Font=AppTheme.Bold};root.Controls.Add(tabs,0,3);
         var invoiceTab=new TabPage("Hóa đơn") {BackColor=Color.White,Padding=new Padding(10)};
+        var depositTab=new TabPage("Phiếu cọc") {BackColor=Color.White,Padding=new Padding(10)};
         var cashTab=new TabPage("Thu chi") {BackColor=Color.White,Padding=new Padding(10)};
         var categoryTab=new TabPage("Theo hạng mục") {BackColor=Color.White,Padding=new Padding(16)};
-        tabs.TabPages.AddRange([invoiceTab,cashTab,categoryTab]);
+        tabs.TabPages.AddRange([invoiceTab,depositTab,cashTab,categoryTab]);
         var invoiceLayout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};invoiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent,100));invoiceLayout.RowStyles.Add(new RowStyle(SizeType.Absolute,58));invoiceTab.Controls.Add(invoiceLayout);
         var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;invoiceLayout.Controls.Add(grid,0,0);
         var invoiceDetail=new Label {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas,Padding=new Padding(12,7,8,4),ForeColor=AppTheme.Ink};invoiceLayout.Controls.Add(invoiceDetail,0,1);
+        var depositLayout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3};
+        depositLayout.RowStyles.Add(new RowStyle(SizeType.Percent,100));depositLayout.RowStyles.Add(new RowStyle(SizeType.Absolute,58));
+        depositLayout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));depositTab.Controls.Add(depositLayout);
+        var depositGrid=Ui.Grid();depositGrid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;depositLayout.Controls.Add(depositGrid,0,0);
+        var depositDetail=new Label {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas,Padding=new Padding(12,7,8,4),ForeColor=AppTheme.Ink};depositLayout.Controls.Add(depositDetail,0,1);
+        var printDeposit=new Button {Text="XEM / IN PHIẾU CỌC",Dock=DockStyle.Right,Width=220,Margin=new Padding(0,6,0,0)};
+        AppTheme.Button(printDeposit,true);depositLayout.Controls.Add(printDeposit,0,2);
+        printDeposit.Click+=(_,_)=>
+        {
+            if(depositGrid.CurrentRow?.DataBoundItem is not DepositReceipt receipt){Ui.Error(dialog,new BusinessException("Chọn phiếu cọc cần in."));return;}
+            PrintDepositReceipt(receipt);
+        };
         var cashLayout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};cashLayout.RowStyles.Add(new RowStyle(SizeType.Percent,100));cashLayout.RowStyles.Add(new RowStyle(SizeType.Absolute,58));cashTab.Controls.Add(cashLayout);
         var cash=Ui.Grid();cash.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;cashLayout.Controls.Add(cash,0,0);
         var cashDetail=new Label {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas,Padding=new Padding(12,7,8,4),ForeColor=AppTheme.Ink};cashLayout.Controls.Add(cashDetail,0,1);
@@ -201,9 +220,12 @@ public partial class ucDashboard
         grid.SelectionChanged+=(_,_)=>
         {
             invoiceDetail.Text=grid.CurrentRow?.DataBoundItem is Invoice invoice
-                ?$"Hóa đơn #{invoice.Id} • P.{invoice.Room} • {invoice.Guest}\nTiền phòng: {invoice.RoomCharge:N0} đ  |  Dịch vụ: {invoice.ServiceCharge:N0} đ  |  Cọc: {invoice.Deposit:N0} đ  |  Hoàn: {invoice.Refunded:N0} đ"
+                ?$"Hóa đơn #{invoice.Id} • P.{invoice.Room} • {invoice.Guest}\nTổng: {invoice.Total:N0} đ  |  Cọc đã thu: {invoice.Deposit:N0} đ  |  Cần thu khi trả: {Math.Max(0,invoice.Total-invoice.Deposit):N0} đ  |  Đã thu thêm: {invoice.Collected:N0} đ  |  Đã hoàn: {invoice.Refunded:N0} đ"
                 :"Chọn một hóa đơn để xem chi tiết.";
         };
+        depositGrid.SelectionChanged+=(_,_)=>depositDetail.Text=depositGrid.CurrentRow?.DataBoundItem is DepositReceipt receipt
+            ?$"Phiếu cọc #{receipt.PaymentId}  •  {receipt.Guest}  •  P.{receipt.Room}  •  {receipt.Phone}\nLần này: {receipt.Amount:N0} đ  |  Tổng cọc: {receipt.TotalDeposited:N0} đ  |  {(receipt.IsEstimate?"Dự kiến tiền phòng":"Tổng hóa đơn")}: {(receipt.FinalInvoiceTotal??receipt.EstimatedRoomCharge):N0} đ  |  {(receipt.IsEstimate?"Dự kiến còn lại, chưa gồm dịch vụ":"Cần thanh toán sau cọc")}: {receipt.Outstanding:N0} đ"
+            :"Chọn phiếu cọc để xem số tiền và tình trạng thanh toán.";
         cash.SelectionChanged+=(_,_)=>
         {
             cashDetail.Text=cash.CurrentRow?.DataBoundItem is PaymentEntry payment
@@ -219,11 +241,23 @@ public partial class ucDashboard
         async Task LoadReport()
         {
             var report=await service.PeriodReportAsync(day.Value,through.Value);
+            var depositReceipts=await service.DepositReceiptsAsync(day.Value,through.Value);
             currentReport=report;
             reportFrom=day.Value;reportThrough=through.Value;
             var invoices=report.Invoices;
             var revenue=report.Revenue;
             grid.DataSource=invoices;
+            depositGrid.DataSource=depositReceipts;
+            foreach(DataGridViewColumn column in depositGrid.Columns)column.Visible=column.Name is "PaymentId" or "Guest" or "Room" or "PaidAt" or "Amount" or "TotalDeposited" or "Outstanding" or "Method";
+            if(depositGrid.Columns["PaymentId"] is { } depositId)depositId.HeaderText="Phiếu cọc";
+            if(depositGrid.Columns["Guest"] is { } depositGuest)depositGuest.HeaderText="Khách";
+            if(depositGrid.Columns["Room"] is { } depositRoom)depositRoom.HeaderText="Phòng";
+            if(depositGrid.Columns["PaidAt"] is { } paidAt){paidAt.HeaderText="Thu lúc";paidAt.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
+            foreach(var key in new[]{"Amount","TotalDeposited","Outstanding"})if(depositGrid.Columns[key] is { } money)money.DefaultCellStyle.Format="N0";
+            if(depositGrid.Columns["Amount"] is { } paid)paid.HeaderText="Thu lần này";
+            if(depositGrid.Columns["TotalDeposited"] is { } deposited)deposited.HeaderText="Tổng cọc";
+            if(depositGrid.Columns["Outstanding"] is { } outstanding)outstanding.HeaderText="Còn lại / dự kiến";
+            if(depositGrid.Columns["Method"] is { } depositMethod)depositMethod.HeaderText="Hình thức";
             foreach(DataGridViewColumn column in grid.Columns)column.Visible=column.Name is "Id" or "Room" or "Guest" or "Issued" or "Total" or "Collected" or "Method";
             if(grid.Columns["Id"] is { } id)id.HeaderText="Hóa đơn";
             if(grid.Columns["Room"] is { } room)room.HeaderText="Phòng";
@@ -236,7 +270,7 @@ public partial class ucDashboard
             invoiceTotal.Text=$"{invoices.Sum(x=>x.Total):N0} đ";deposits.Text=$"{payments.Where(p=>p.Kind=="Deposit").Sum(p=>p.Amount):N0} đ";
             refunds.Text=$"{payments.Where(p=>p.Kind=="Refund").Sum(p=>p.Amount):N0} đ";
             forfeits.Text=$"{payments.Where(p=>p.Kind=="Forfeit").Sum(p=>p.Amount):N0} đ";netCash.Text=$"{payments.Sum(p=>p.CashFlow):N0} đ";
-            invoiceTab.Text=$"Hóa đơn ({invoices.Count})";cashTab.Text=$"Thu chi ({payments.Count})";
+            invoiceTab.Text=$"Hóa đơn ({invoices.Count})";depositTab.Text=$"Phiếu cọc ({depositReceipts.Count})";cashTab.Text=$"Thu chi ({payments.Count})";
             cash.DataSource=payments;
             foreach(DataGridViewColumn column in cash.Columns)column.Visible=column.Name is "Created" or "Guest" or "Kind" or "Amount" or "CashFlow" or "Method";
             if(cash.Columns["Created"] is { } date){date.HeaderText="Thời điểm";date.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
@@ -270,13 +304,15 @@ public partial class ucDashboard
     }
     private async Task ShowAccounts()
     {
-        using var dialog=new Form {Text=user.Role=="Admin"?"Tài khoản cá nhân và phân quyền":"Tài khoản cá nhân",Size=new Size(920,680),MinimumSize=new Size(720,560),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
+        using var dialog=new Form {Text=FunctionPolicy.Can(user,"staff.manage")?"Tài khoản cá nhân và phân quyền":"Tài khoản cá nhân",Size=new Size(920,680),MinimumSize=new Size(720,560),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
         var root=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,82));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));dialog.Controls.Add(root);
         var heading=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(24,12,20,8)};
         heading.Controls.Add(new Label {Text=dialog.Text,Dock=DockStyle.Top,Height=36,Font=AppTheme.Title,ForeColor=AppTheme.Ink});
         heading.Controls.Add(new Label {Text=$"Đang đăng nhập: {user.Username}  •  {RolePolicy.Name(user.Role)}",Dock=DockStyle.Bottom,Height=22,ForeColor=AppTheme.Muted});root.Controls.Add(heading,0,0);
         var tabs=new TabControl {Dock=DockStyle.Fill,Margin=new Padding(18,14,18,16),Font=AppTheme.Bold};root.Controls.Add(tabs,0,1);
+        if(FunctionPolicy.Can(user,"system.password"))
+        {
         var personal=new TabPage("Mật khẩu của tôi") {BackColor=Color.White,Padding=new Padding(22,20,22,18)};tabs.TabPages.Add(personal);
         var personalFields=new TableLayoutPanel {Dock=DockStyle.Top,Height=300,ColumnCount=1,RowCount=8};
         personalFields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
@@ -303,7 +339,8 @@ public partial class ucDashboard
             catch(Exception ex){Ui.Error(dialog,ex);}
             finally{changeMine.Enabled=true;}
         }
-        if(user.Role=="Admin")
+        }
+        if(FunctionPolicy.Can(user,"staff.manage"))
         {
             var permissions=new TabPage("Nhân viên và phân quyền") {BackColor=Color.White,Padding=new Padding(18,16,18,14)};tabs.TabPages.Add(permissions);
             var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=5};
@@ -319,17 +356,18 @@ public partial class ucDashboard
             editor.Controls.Add(new Label {Text="Trạng thái",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},1,0);
             var editRole=Ui.Combo(RolePolicy.Roles);editRole.Dock=DockStyle.Fill;editor.Controls.Add(editRole,0,1);
             var active=new CheckBox {Text="Cho phép đăng nhập",Checked=true,Dock=DockStyle.Fill,Padding=new Padding(18,0,0,0)};editor.Controls.Add(active,1,1);
-            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1};
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));layout.Controls.Add(actions,0,4);
+            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=1};
+            for(var i=0;i<3;i++)actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/3));layout.Controls.Add(actions,0,4);
             var save=new Button {Text="LƯU QUYỀN / TRẠNG THÁI",Dock=DockStyle.Fill,Margin=new Padding(0,6,6,0)};AppTheme.Button(save,true);actions.Controls.Add(save,0,0);
-            var resetPassword=new Button {Text="ĐỔI MẬT KHẨU NHÂN VIÊN",Dock=DockStyle.Fill,Margin=new Padding(6,6,0,0)};AppTheme.Button(resetPassword);actions.Controls.Add(resetPassword,1,0);
+            var functionPermissions=new Button {Text="QUYỀN CHỨC NĂNG",Dock=DockStyle.Fill,Margin=new Padding(3,6,3,0)};AppTheme.Button(functionPermissions);actions.Controls.Add(functionPermissions,1,0);
+            var resetPassword=new Button {Text="ĐỔI MẬT KHẨU NHÂN VIÊN",Dock=DockStyle.Fill,Margin=new Padding(6,6,0,0)};AppTheme.Button(resetPassword);actions.Controls.Add(resetPassword,2,0);
             UserInfo Selected()=>grid.CurrentRow?.DataBoundItem as UserInfo??throw new BusinessException("Chọn tài khoản.");
             void ShowSelection()
             {
                 if(grid.CurrentRow?.DataBoundItem is not UserInfo item)return;
                 selectedLabel.Text=$"Đang chọn: {item.Username}"+(item.Id==user.Id?"  •  Tài khoản đang sử dụng không thể tự đổi quyền":"");
                 editRole.SelectedItem=item.Role;active.Checked=item.Active;
-                save.Enabled=item.Id!=user.Id;resetPassword.Enabled=item.Id!=user.Id;
+                save.Enabled=item.Id!=user.Id;functionPermissions.Enabled=item.Id!=user.Id;resetPassword.Enabled=item.Id!=user.Id;
             }
             async Task LoadRows(int? selectId=null)
             {
@@ -349,6 +387,42 @@ public partial class ucDashboard
                 try{var selected=Selected();await auth.UpdateUserAsync(user,selected,(string)editRole.SelectedItem!,active.Checked);await LoadRows(selected.Id);}
                 catch(Exception ex){Ui.Error(dialog,ex);}
                 finally{ShowSelection();}
+            };
+            functionPermissions.Click+=async (_,_)=>
+            {
+                try
+                {
+                    var selected=Selected();
+                    var granted=await auth.UserFunctionsAsync(user,selected);
+                    var available=FunctionPolicy.All.Where(x=>FunctionPolicy.RoleAllows(selected.Role,x.Code)).ToArray();
+                    using var grantDialog=new Form {Text=$"Chức năng của {selected.Username}",Size=new Size(720,720),MinimumSize=new Size(560,520),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas};
+                    var grantRoot=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(18)};
+                    grantRoot.RowStyles.Add(new RowStyle(SizeType.Absolute,65));grantRoot.RowStyles.Add(new RowStyle(SizeType.Percent,100));grantRoot.RowStyles.Add(new RowStyle(SizeType.Absolute,60));grantDialog.Controls.Add(grantRoot);
+                    grantRoot.Controls.Add(new Label {Text=$"Chọn chức năng được phép dùng cho {selected.Username}\nThay đổi quyền sẽ yêu cầu nhân viên đăng nhập lại.",Dock=DockStyle.Fill,ForeColor=AppTheme.Ink},0,0);
+                    var list=new CheckedListBox {Dock=DockStyle.Fill,CheckOnClick=true,IntegralHeight=false,Font=AppTheme.Body};
+                    for(var i=0;i<available.Length;i++)
+                    {
+                        var item=available[i];
+                        var menuName=MainMenus.Single(x=>x.Code==item.Menu).Title;
+                        list.Items.Add($"{menuName}  ›  {item.Submenu}  ›  {item.Name}",granted.Contains(item.Code));
+                    }
+                    grantRoot.Controls.Add(list,0,1);
+                    var saveFunctions=new Button {Text="LƯU QUYỀN CHỨC NĂNG",Dock=DockStyle.Fill};AppTheme.Button(saveFunctions,true);grantRoot.Controls.Add(saveFunctions,0,2);
+                    saveFunctions.Click+=async (_,_) =>
+                    {
+                        saveFunctions.Enabled=false;
+                        try
+                        {
+                            var codes=Enumerable.Range(0,available.Length).Where(list.GetItemChecked).Select(i=>available[i].Code).ToArray();
+                            await auth.SaveUserFunctionsAsync(user,selected,codes);
+                            grantDialog.DialogResult=DialogResult.OK;
+                            grantDialog.Close();
+                        }
+                        catch(Exception ex){Ui.Error(grantDialog,ex);saveFunctions.Enabled=true;}
+                    };
+                    if(grantDialog.ShowDialog(dialog)==DialogResult.OK)await LoadRows(selected.Id);
+                }
+                catch(Exception ex){Ui.Error(dialog,ex);}
             };
             resetPassword.Click+=async (_,_)=>
             {

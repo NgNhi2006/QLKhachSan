@@ -42,7 +42,7 @@ public partial class ucDashboard
 
     private Task ShowRevenueChart()
     {
-        tabMainView.SelectedTab=tabThongKe;
+        ShowFinanceChart();
         return Task.CompletedTask;
     }
 }

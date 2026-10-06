@@ -106,7 +106,7 @@ public partial class ucDashboard
             if(index<items.Length){e.HasMorePages=true;return;}
             Rule(y);y+=12;
             void Amount(string label,decimal value,bool emphasize=false){Text(label,emphasize?bold:normal,right-300,y,205,StringAlignment.Far);Text(value.ToString("N0")+" đ",emphasize?bold:normal,right-90,y,90,StringAlignment.Far);y+=23;}
-            Amount("Tiền phòng",invoice.RoomCharge);Amount("Dịch vụ",invoice.ServiceCharge);Amount("TỔNG HÓA ĐƠN",invoice.Total,true);Amount("Cọc đã thu",invoice.Deposit);Amount("Thu thêm",invoice.Collected);Amount("Hoàn khách",invoice.Refunded);
+            Amount("Tiền phòng",invoice.RoomCharge);Amount("Dịch vụ",invoice.ServiceCharge);Amount("TỔNG HÓA ĐƠN",invoice.Total,true);Amount("Cọc đã thu",invoice.Deposit);Amount("Cần thu sau cọc",Math.Max(0,invoice.Total-invoice.Deposit),true);Amount("Đã thu thêm",invoice.Collected);Amount("Hoàn khách",invoice.Refunded);
             y+=10;Rule(y);y+=12;Text("Thu ngân",bold,left+35,y,170,StringAlignment.Center);Text("Khách hàng",bold,right-205,y,170,StringAlignment.Center);y+=22;
             Text("(Ký, ghi rõ họ tên)",normal,left+35,y,170,StringAlignment.Center);Text("(Ký, ghi rõ họ tên)",normal,right-205,y,170,StringAlignment.Center);
             Text("Phiếu thanh toán nội bộ, không phải hóa đơn GTGT hoặc chứng từ thuế.",normal,left,bounds.Bottom-25,bounds.Width,StringAlignment.Center);

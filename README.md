@@ -1,4 +1,4 @@
-# QLKhachSan — quản lý khách sạn (phiên bản dữ liệu 6)
+# QLKhachSan — quản lý khách sạn (phiên bản dữ liệu 11)
 
 Ứng dụng WinForms .NET 10, SQL Server Express, phân tầng GUI / BLL / DAL / DTO.
 
@@ -8,6 +8,12 @@
 
 **[Phân hệ Tài chính - Kế toán](docs/ACCOUNTING_FINANCE.md)** — quy trình ca, khóa kỳ, sổ quỹ, công nợ, kho minibar, đối soát và giới hạn báo cáo.
 
+**[Đối chiếu 9 bảng menu và 37 chức năng](docs/MENU_DATABASE_MAPPING.md)** — tên bảng, menu con, mã chức năng và dòng mã xử lý.
+
+**[Tên cột CSDL tiếng Việt](docs/COT_DATABASE.md)** — đối chiếu 120 tên cột cũ và mới, ví dụ truy vấn và cách xem mô tả trong SQL Server.
+
+**[Biên bản kiểm thử V11](docs/V11_VERIFICATION.md)** — kết quả nâng cấp bản sao V9, chạy lại script, đối chiếu dữ liệu cũ và kiểm thử giao dịch gộp, rollback, phân quyền.
+
 Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **ô nhập/dữ liệu nguồn → nút → hàm GUI → hàm BLL → câu SQL/bảng → kết quả trên màn hình**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
 
 ## Chạy ứng dụng
@@ -15,10 +21,11 @@
 - Mở `QLKhachSan.slnx`, chọn `QLKhachSan` làm startup project và F5; hoặc `dotnet run --project QLKhachSan`.
 - Cần .NET SDK 10 để build; bản publish cần .NET Desktop Runtime 10.
 - Kết nối mặc định: `.\SQLEXPRESS`, database `QLKhachSanApp`, Windows Authentication.
-- Máy mới: chạy `Database/Setup.sql` trong SSMS. Lần mở ứng dụng tiếp theo tự nâng schema qua các bản `Database/MigrateV2.sql` đến `Database/MigrateV6.sql`.
-- Có thể chạy migration thủ công trong đúng database; không cần SQLCMD mode. Migration dùng transaction, khóa và có thể chạy lại.
+- Máy mới: chạy duy nhất [`Database/Database.sql`](Database/Database.sql) trong SSMS để tạo CSDL hoàn chỉnh đến V11. Máy đang dùng bản V1–V10 có thể chạy lại file này hoặc để ứng dụng tự đọc các phần nâng cấp còn thiếu từ cùng file.
+- File SQL chạy trong SSMS thông thường, không cần SQLCMD mode. Các phần nâng cấp dùng transaction, khóa và có thể chạy lại.
+- Nếu chạy bằng `sqlcmd`, dùng `-f 65001` để giữ nguyên tên menu và chuỗi tiếng Việt UTF-8.
 - Khi nâng cấp: đóng tất cả phiên ứng dụng cũ, sao lưu database và kiểm tra khôi phục trước. Bản cũ không tương thích với schema mới.
-- Migration giữ dữ liệu và hạn nhận của các lượt đặt cũ. Trạng thái vật lý `DaDat` được chuyển thành `Trong`; lịch đặt vẫn nằm trong `Stays`.
+- Migration giữ dữ liệu và hạn nhận của các lượt đặt cũ. Trạng thái vật lý `DaDat` được chuyển thành `Trong`; lịch đặt vẫn nằm trong `LuotLuuTru`.
 - Migration V3 lưu trữ và vô hiệu hóa toàn bộ tài khoản đăng nhập cũ, giữ các bản ghi để hóa đơn và nhật ký không mất người thực hiện. Lần đăng nhập đầu sau nâng cấp cần tạo Admin mới; có thể dùng lại tên đăng nhập cũ. Tài khoản SQL chạy migration cần quyền thay đổi schema.
 
 ## Cấu hình
@@ -36,28 +43,36 @@ Kết nối SQL Express cục bộ dùng `Encrypt=True;TrustServerCertificate=Tr
 - Hạn nhận có thể chỉnh từ giờ đến đến trước ngày trả nhưng không vượt giới hạn giữ chỗ. Thu cọc lần đầu trong hạn chuyển giới hạn tối đa từ 24 giờ sang 15 ngày tính từ lúc tạo đặt phòng, nhưng hạn thực tế vẫn phải trước ngày trả. Lượt đã có cọc giữ nguyên hạn đã lưu khi thu thêm.
 - **Quá hạn nhận mà chưa check-in: hủy lượt, không hoàn toàn bộ tiền cọc.** Chính xác tại hạn cũng được xem là quá hạn. Lượt không có cọc cũng được hủy để giải phóng lịch.
 - Hủy trước hạn: hoàn toàn bộ cọc. Nếu màn hình hoàn tiền đã mở nhưng sau đó vượt hạn, hệ thống từ chối số tiền hoàn cũ và yêu cầu mở lại.
-- Tự xử lý quá hạn lúc mở dashboard, làm mới và mỗi phút khi dashboard rảnh. Không có Windows service độc lập: khi ứng dụng đóng hoặc đang mở dialog, xử lý được thực hiện ở lần refresh tiếp theo. Nghiệp vụ nhận/sửa/thu thêm/hủy vẫn kiểm tra hạn theo giờ SQL ngay tại giao dịch.
+- Tự xử lý quá hạn lúc mở Menu chính, làm mới và mỗi phút khi ứng dụng rảnh. Không có Windows service độc lập: khi ứng dụng đóng hoặc đang mở dialog, xử lý được thực hiện ở lần refresh tiếp theo. Nghiệp vụ nhận/sửa/thu thêm/hủy vẫn kiểm tra hạn theo giờ SQL ngay tại giao dịch.
 - Cọc có thể nhập số tiền thực thu, thu nhiều đợt. Thu thêm không kéo dài hạn nhận. Không nhận thêm cọc hoặc sửa lịch của lượt đã quá hạn.
-- Cọc mất được lưu bằng `Payments.Kind='Forfeit'`, có unique index cho mỗi lượt và audit `NoShow`. Đây là ghi nhận khoản cọc đã thu, **không phải lần thu tiền mới**. Không tạo `Refund` cho lượt quá hạn.
+- Cọc mất được lưu bằng `GiaoDichThanhToan.LoaiGiaoDich='Forfeit'`, có unique index cho mỗi lượt và audit `NoShow`. Đây là ghi nhận khoản cọc đã thu, **không phải lần thu tiền mới**. Không tạo `Refund` cho lượt quá hạn.
 - Kiểm tra trùng lịch được thực hiện trong transaction khi đặt/sửa lịch, nhận, đổi và gia hạn phòng. Nhận sớm/muộn vẫn giữ số ngày dự kiến; nếu ngày trả mới đè lên lịch khác thì bị từ chối.
 
 ## Nghiệp vụ và giao diện
 
 Vai trò đăng nhập: **Admin** (vận hành, kế toán, tài khoản), **Reception** (phòng, lịch đặt, dịch vụ, khách, ca cá nhân), **Accountant** (sổ sách, khóa ca/kỳ), **Manager** (vận hành và tài chính). Accountant và Manager không thực hiện nghiệp vụ lễ tân; các quyền ghi sổ được kiểm soát riêng trong phân hệ kế toán. Admin quản lý tạo, đổi quyền, khóa và đặt lại mật khẩu nhân viên trong màn hình **Tài khoản & Nhân viên**.
 
+Sau khi đăng nhập, ứng dụng đi theo luồng **Menu tổng → Menu con → Màn hình chức năng**. Menu tổng có tối đa chín nhóm: **Quản lý phòng**, **Dịch vụ**, **Khách hàng**, **Ca trực**, **Thu chi**, **Hóa đơn**, **Báo cáo**, **Nhân viên**, **Hệ thống**. Các ô dàn theo khung cửa sổ; chỉ nhóm có chức năng được cấp quyền mới xuất hiện. Có nút trở lại Menu tổng từ menu con và màn hình chức năng. Không có trang Tổng quan.
+
+Menu tổng và menu con dùng ô chức năng có biểu tượng để nhân viên chọn nhanh. **Nhận phòng trực tiếp** mở bảng phòng trống; **Đặt phòng trước** mở bảng phòng còn chỗ theo ngày đến và số ngày thuê. Nhân viên lọc theo số/loại phòng, chọn một dòng rồi mới nhập thông tin khách. **Thu cọc, nhận phòng đã đặt, sửa và hủy lượt đặt** dùng bảng lượt đặt có tìm kiếm theo phòng, khách hoặc điện thoại. Hệ thống kiểm tra lại tình trạng và lịch phòng trong giao dịch lưu.
+
+**Quản lý phòng** gồm các menu con Phòng, Đặt phòng, Lưu trú, Buồng phòng và Danh mục phòng. Toàn bộ gọi/xử lý dịch vụ, danh mục dịch vụ và kho minibar nằm trong menu tổng **Dịch vụ**. Admin cấp quyền từng chức năng cho nhân viên tại **Nhân viên → Phân quyền → Tài khoản & phân quyền → Quyền chức năng**. Vai trò giới hạn danh sách quyền tối đa; quyền cá nhân quyết định chức năng nào hiện và được thực thi. Đổi quyền làm phiên cũ hết hiệu lực.
+
+Migration V7 thêm các bảng cấu trúc menu và quyền từng tài khoản. V8 thêm chín bảng chức năng theo chín menu tổng. Mọi lệnh `CREATE TABLE` trong file SQL dùng tên bảng tiếng Việt không dấu, ví dụ `Phong`, `LuotLuuTru`, `HoaDon`, `ChucNangQuanLyPhong`. Với bản cài V1–V8 cũ, đoạn chuyển đổi đầu file đổi tên 39 bảng tại chỗ trước khi nâng cấp tiếp; dữ liệu và khóa ngoại được giữ nguyên. V9 đánh dấu cấu trúc bảng hoàn tất. V10 đổi tên cột sang tiếng Việt không dấu và gắn mô tả tiếng Việt cho tất cả bảng/cột; bản đang dùng được nâng cấp tại chỗ, giữ dữ liệu. Ứng dụng đọc các bảng menu khi đăng nhập và cấp quyền. Tài khoản cũ mặc định nhận các chức năng của vai trò hiện tại cho đến khi Admin tùy chỉnh. Xem [danh sách tên bảng](docs/MENU_DATABASE_MAPPING.md#ten-bang-sau-v9) và [danh sách tên cột](docs/COT_DATABASE.md).
+
 - Sơ đồ hiển thị trạng thái vật lý; dấu `*` sau số phòng báo có lịch đặt. Nhận lượt đã đặt bằng nút **Nhận phòng** ở danh sách đặt hoặc lịch đến/đi.
 - **Sửa thông tin khách**: trên bảng đặt trước, bấm nút ở đúng dòng khách còn chờ nhận để sửa họ tên, SĐT, CCCD/hộ chiếu, hoặc phòng/ngày/hạn nhận; bắt buộc lý do và giữ nguyên tiền đã thu. Xem [đường sửa và bảng dữ liệu liên quan](docs/THONG_TIN.md#sua-thong-tin-khach).
 - **Lịch đặt / Lịch sử**: xem lượt hoạt động theo khoảng ngày hoặc tra cứu 500 lượt gần nhất theo tên/SĐT/giấy tờ, gồm lượt hủy. Xuất CSV UTF-8.
 - **Thu cọc bổ sung**: chọn lượt, số tiền, phương thức và xác nhận thực thu.
 - **Xử lý dịch vụ**: sửa số lượng có lý do, hủy dòng chưa giao, giao từng phần. Sau khi giao một phần chỉ được giảm xuống ít nhất số đã giao. Dòng hủy còn trong lịch sử, không tính tiền. Không sửa dịch vụ của lượt đã thanh toán.
-- Danh mục phòng và dịch vụ được lưu trong database để phục vụ đặt phòng, gọi dịch vụ và tính tiền. Admin và Manager có các mục **Danh mục phòng**, **Danh mục dịch vụ**, **Bảng giá** trên dashboard. Bảo trì phòng chỉ khi đã xử lý hết lịch đặt.
+- Danh mục phòng và dịch vụ được lưu trong database để phục vụ đặt phòng, gọi dịch vụ và tính tiền. **Danh mục phòng** và **Bảng giá phòng** thuộc Quản lý phòng; **Danh mục dịch vụ** và **Kho minibar** thuộc Dịch vụ. Bảo trì phòng chỉ khi đã xử lý hết lịch đặt.
 - **Tài khoản & Nhân viên** (Admin): tạo tài khoản, đổi quyền, khóa/mở và đặt lại mật khẩu trên cùng một màn hình. Không sửa quyền hoặc khóa tài khoản đang sử dụng.
 - Đổi mật khẩu, đặt lại mật khẩu, đổi quyền hoặc khóa tài khoản làm mất hiệu lực phiên cũ. Phiên tự đổi mật khẩu được cập nhật sau khi giao dịch thành công.
 - **Nhật ký thao tác** (Admin): xem tối đa 1.000 thao tác gần nhất theo ngày.
 
 ## Tài chính - Kế toán (schema V6)
 
-Mở **Tài chính / Bàn giao ca** trên dashboard. Lễ tân xem và nộp ca của mình; Admin, Kế toán và Quản lý xem thêm các tab **Sổ quỹ, Đối soát ngân hàng, Công nợ, Kho minibar, Hóa đơn, Nhóm bill, Lãi lỗ**. Khoảng báo cáo tối đa 367 ngày. Chi tiết nghiệp vụ và giới hạn số liệu xem [tài liệu Tài chính - Kế toán](docs/ACCOUNTING_FINANCE.md).
+Mở **Ca trực → Ca trực → Ca trực / bàn giao** từ Menu tổng. Sổ quỹ và các khoản thu chi ở **Thu chi**; hóa đơn và nhóm bill ở **Hóa đơn**; doanh thu và lãi lỗ ở **Báo cáo**; kho minibar ở **Dịch vụ**. Các tab tài chính chỉ hiện khi tài khoản có quyền tương ứng. Khoảng báo cáo tối đa 367 ngày. Chi tiết nghiệp vụ và giới hạn số liệu xem [tài liệu Tài chính - Kế toán](docs/ACCOUNTING_FINANCE.md).
 
 - Mở ca với tiền đầu ca, nộp ca bằng tiền thực đếm và giải trình chênh lệch; Kế toán/Quản lý/Admin khóa ca đã bàn giao và khóa kỳ theo tháng. Trigger SQL chặn ghi vào ca/kỳ đã khóa.
 - Sổ quỹ theo Cash/Bank/POS/OTA gồm số dư mở sổ, thanh toán và phiếu thu/chi; QR/POS có mã giao dịch. Nhập sao kê Bank/POS rồi đối soát theo kênh, mã và số tiền.
@@ -65,18 +80,18 @@ Mở **Tài chính / Bàn giao ca** trên dashboard. Lễ tân xem và nộp ca 
 - Hóa đơn hỗ trợ hủy có lý do, giảm trừ có người duyệt, phân bổ tách/gộp bill và ghi nhận số e-Invoice. VAT, phí phục vụ và đơn vị làm tròn được lưu để đối chiếu; hiện chưa tự cộng các khoản đó vào hóa đơn gốc hoặc phát hành hóa đơn điện tử.
 - Lãi lỗ và ADR/RevPAR/tỷ lệ lấp đầy là báo cáo quản trị sơ bộ: chưa có tồn phòng khả dụng theo từng đêm lịch sử; doanh thu và giá vốn có thể ở khác kỳ.
 
-Migration V6 chạy trong transaction. Nếu nâng cấp thất bại, màn hình đăng nhập hiển thị phiên bản, mã lỗi SQL và số dòng để xác định nguyên nhân; sửa lỗi rồi khởi động lại. Chưa xác nhận V6 bằng kiểm thử tích hợp trên SQL Server của máy phát triển, nên hãy thử trên bản sao database trước khi đưa vào vận hành.
+Các migration chạy trong transaction. Nếu nâng cấp thất bại, màn hình đăng nhập hiển thị phiên bản, mã lỗi SQL và số dòng để xác định nguyên nhân; sửa lỗi rồi khởi động lại. Hãy thử trên bản sao database trước khi đưa vào vận hành.
 
 ## Tính tiền và báo cáo
 
 - Tiền phòng: tối thiểu 1 ngày, làm tròn tổng thời gian ở lên ngày 24 giờ. Nếu đổi phòng, chia thời gian thực theo giá đã lưu; phần ngày còn thiếu tính theo giá phòng cuối. Làm tròn tiền phòng đến 1 đồng.
 - Bảng tính checkout giữ giá 10 phút; nghiệp vụ khác thay đổi lượt sẽ làm bảng tính cũ hết hiệu lực. Chỉ checkout khi dịch vụ chưa hủy đã giao đủ. Mỗi lượt chỉ có một hóa đơn.
 - Cọc thừa khi checkout vẫn được hoàn; chính sách mất cọc chỉ áp dụng khách đặt phòng quá hạn chưa nhận.
-- Ngày lập hóa đơn và ngày thu checkout lấy thời điểm xác nhận. Thời điểm chốt giá phòng được giữ riêng qua thời điểm kết thúc `StaySegments`.
+- Ngày lập hóa đơn và ngày thu checkout lấy thời điểm xác nhận. Thời điểm chốt giá phòng được giữ riêng qua thời điểm kết thúc `ChangLuuTru`.
 - **Hóa đơn / Doanh thu**: khoảng ngày tối đa 367 ngày; doanh thu hóa đơn và cọc không hoàn hiển thị riêng. Thu cọc, thu checkout, hoàn cọc, phương thức và nhân viên được liệt kê để đối chiếu thu/chi.
 - `Forfeit` có dòng tiền bằng 0. Không cộng lại cọc mất vào tiền thực thu. Phân hệ kế toán V6 có mở, bàn giao và khóa ca với số dư đầu/cuối.
 - Mọi lưới có menu xuất `.xlsx`; một số báo cáo cũ vẫn có nút xuất CSV UTF-8. Xem trước/in phiếu thanh toán, phiếu thu/chi, biên bản ca và báo cáo công nợ. Phiếu thanh toán nội bộ chưa phải hóa đơn thuế điện tử.
-- Dashboard dùng giờ SQL Server làm mốc; máy trạm và SQL Server cần cùng múi giờ Việt Nam.
+- Ứng dụng dùng giờ SQL Server làm mốc; máy trạm và SQL Server cần cùng múi giờ Việt Nam.
 
 ## Build và xuất bản
 

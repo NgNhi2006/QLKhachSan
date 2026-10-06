@@ -4,18 +4,8 @@ namespace QLKhachSan.GUI;
 
 public partial class ucDashboard
 {
-    private string DashboardTitle() => user.Role switch
-    {
-        "Admin" => "Tổng quan quản trị",
-        "Manager" => "Tổng quan quản lý",
-        "Reception" => "Bàn lễ tân",
-        "Accountant" => "Tổng quan kế toán",
-        _ => "Tổng quan"
-    };
-
     private void ConfigureRoleDashboard()
     {
-        lblHeaderTitle.Text=$"{DashboardTitle()} • {user.Username}";
         lblToolsTitle.Text=user.Role switch
         {
             "Admin" => "QUẢN TRỊ HỆ THỐNG",

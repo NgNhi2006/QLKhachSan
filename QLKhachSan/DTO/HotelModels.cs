@@ -5,6 +5,7 @@ public enum StayStatus { Reserved, Occupied, Paid, Cancelled }
 public sealed record UserSession(int Id, string Username, string Role)
 {
     public long SecurityVersion { get; set; } = 1;
+    public HashSet<string>? GrantedFunctions { get; set; }
 }
 public sealed record Room(int Id, string Number, string Type, decimal Rate, decimal Deposit, RoomStatus Status, long Version)
 {
@@ -45,6 +46,13 @@ public sealed record PaymentEntry(long Id, long StayId, string Guest, string Kin
     // Forfeit recognizes a previously received deposit; it is not another cash receipt.
     public decimal CashFlow => Method == "Công nợ OTA" || Kind == "Forfeit" ? 0 : Kind == "Refund" ? -Amount : Amount;
 }
+public sealed record CustomerDepositHistory(List<Stay> Stays,List<PaymentEntry> Payments);
+public sealed record DepositReceipt(long PaymentId,long StayId,string Guest,string Phone,string Room,DateTime PaidAt,
+    decimal Amount,decimal TotalDeposited,decimal EstimatedRoomCharge,decimal? FinalInvoiceTotal,string Method,string Note)
+{
+    public decimal Outstanding => Math.Max(0,(FinalInvoiceTotal??EstimatedRoomCharge)-TotalDeposited);
+    public bool IsEstimate => FinalInvoiceTotal is null;
+}
 public sealed record PeriodReport(List<Invoice> Invoices, List<RevenueItem> Revenue, List<PaymentEntry> Payments);
 public sealed record UserInfo(int Id, string Username, string Role, bool Active, DateTime? LockedUntil, long Version);
 public sealed record ServiceCatalogItem(int Id, string Category, string Name, decimal Price, string Unit, bool Active, long Version);
@@ -56,4 +64,6 @@ public sealed record BillQuote(Stay Stay, Room Room, DateTime At, decimal RoomCh
     public decimal ToCollect => Math.Max(0, Total - Stay.Deposit);
     public decimal ToRefund => Math.Max(0, Stay.Deposit - Total);
 }
+public sealed record GroupCheckoutResult(long GroupId,List<long> InvoiceIds,string Guest,decimal Total,
+    decimal Deposits,decimal Collected,decimal Refunded);
 public sealed class BusinessException(string message) : Exception(message);

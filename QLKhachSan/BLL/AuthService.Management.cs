@@ -5,19 +5,48 @@ namespace QLKhachSan.BLL;
 
 public sealed partial class AuthService
 {
+    public Task<HashSet<string>> UserFunctionsAsync(UserSession actor,UserInfo selected) => repository.RunAsync(false,async db=>
+    {
+        await db.RequireUserAsync(actor,true);
+        FunctionPolicy.Require(actor,"staff.manage");
+        var current=(await db.UsersAsync()).SingleOrDefault(x=>x.Id==selected.Id)
+            ?? throw new BusinessException("Tài khoản không tồn tại.");
+        return await db.UserFunctionsAsync(current.Id);
+    });
+
+    public Task SaveUserFunctionsAsync(UserSession actor,UserInfo selected,IReadOnlyCollection<string> codes) => repository.RunAsync(true,async db=>
+    {
+        await db.RequireUserAsync(actor,true);
+        FunctionPolicy.Require(actor,"staff.manage");
+        if(selected.Id==actor.Id)throw new BusinessException("Không tự thay đổi quyền của tài khoản đang sử dụng.");
+        var current=(await db.UsersAsync()).SingleOrDefault(x=>x.Id==selected.Id)
+            ?? throw new BusinessException("Tài khoản không tồn tại.");
+        if(current.Version!=selected.Version)throw new BusinessException("Tài khoản đã thay đổi. Hãy mở lại.");
+        if(codes.Any(code=>!FunctionPolicy.RoleAllows(current.Role,code)))
+            throw new BusinessException("Có chức năng không thuộc vai trò nhân viên.");
+        var available=await db.MenuFunctionCodesAsync();
+        if(codes.Any(code=>!available.Contains(code)))
+            throw new BusinessException("Có chức năng không thuộc menu hiện hành.");
+        await db.SaveUserFunctionsAsync(current.Id,codes.Distinct(StringComparer.Ordinal));
+        return await db.AuditAsync(actor,"UserFunctions",$"Cấp {codes.Count} chức năng cho {current.Username}; thu hồi phiên cũ");
+    });
     public Task<List<UserInfo>> EmployeesAsync(UserSession actor) => repository.RunAsync(false,async db=>
     {
         await db.RequireUserAsync(actor);
+        FunctionPolicy.Require(actor,"staff.view");
         if(actor.Role is not ("Admin" or "Manager"))throw new BusinessException("Không có quyền xem nhân viên.");
         return (await db.UsersAsync()).Where(x=>x.Role!="Admin").ToList();
     });
     public Task<List<UserInfo>> UsersAsync(UserSession actor) => repository.RunAsync(false,async db=>
     {
-        await db.RequireUserAsync(actor,true);return await db.UsersAsync();
+        await db.RequireUserAsync(actor,true);
+        FunctionPolicy.Require(actor,"staff.manage");
+        return await db.UsersAsync();
     });
     public Task UpdateUserAsync(UserSession actor,UserInfo selected,string role,bool active) => repository.RunAsync(true,async db=>
     {
         await db.RequireUserAsync(actor,true);
+        FunctionPolicy.Require(actor,"staff.manage");
         if(!RolePolicy.Roles.Contains(role)) throw new BusinessException("Vai trò không hợp lệ.");
         if(selected.Id==actor.Id) throw new BusinessException("Không thay đổi quyền/khóa tài khoản đang sử dụng.");
         var current=(await db.UsersAsync()).SingleOrDefault(x=>x.Id==selected.Id);
@@ -34,6 +63,7 @@ public sealed partial class AuthService
         await repository.RunAsync(true,async db=>
         {
             await db.RequireUserAsync(actor,true);
+            FunctionPolicy.Require(actor,"staff.manage");
             if(selected.Id==actor.Id) throw new BusinessException("Hãy dùng mục đổi mật khẩu cho tài khoản đang sử dụng.");
             var current=(await db.UsersAsync()).SingleOrDefault(x=>x.Id==selected.Id);
             if(current is null || current.Version!=selected.Version) throw new BusinessException("Tài khoản đã thay đổi. Hãy mở lại.");
