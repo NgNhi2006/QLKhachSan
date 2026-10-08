@@ -74,6 +74,39 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
             return id;
         });
     }
+    public Task<List<long>> CreateStaysAsync(IReadOnlyList<Room> selected,GuestInput guest,bool reserve,DateTime arrival,int days,bool takeDeposit,string method,decimal depositPerRoom=0,DateTime? receiveBy=null,string? reference=null)
+    {
+        FunctionPolicy.Require(user,reserve?"room.reserve":"room.walkin");
+        guest=ValidateGuest(guest);Method(method);
+        if(selected.Count is <2 or >20 || selected.Select(x=>x.Id).Distinct().Count()!=selected.Count)
+            throw new BusinessException("Chọn 2–20 phòng khác nhau.");
+        if(days is <1 or >60)throw new BusinessException("Số ngày thuê phải từ 1 đến 60.");
+        if(!reserve && (takeDeposit || depositPerRoom!=0))throw new BusinessException("Nhận phòng trực tiếp không thu cọc.");
+        if(reserve && takeDeposit && method=="Công nợ OTA")throw new BusinessException("Tiền cọc phải thực thu.");
+        ValidateMoney(depositPerRoom);
+        if(takeDeposit && depositPerRoom==0)throw new BusinessException("Số tiền cọc mỗi phòng phải lớn hơn 0.");
+        return Write(async db=>
+        {
+            var now=await db.NowAsync();if(!reserve)arrival=now;
+            DateTime? hold=reserve?(receiveBy??ReservationHoldLimit(now,takeDeposit)):null;
+            if(reserve && (arrival<now || arrival>=ReservationHoldLimit(now,takeDeposit) || hold<arrival || hold>=arrival.AddDays(days) || hold>ReservationHoldLimit(now,takeDeposit)))
+                throw new BusinessException("Ngày đến và hạn nhận không hợp lệ với thời gian giữ chỗ.");
+            var ids=new List<long>();
+            foreach(var expected in selected)
+            {
+                var room=await db.RoomAsync(expected.Id);RoomUnchanged(room,expected,expected.Status);
+                if(room.Status==RoomStatus.BaoTri || (!reserve && room.Status!=RoomStatus.Trong))throw new BusinessException($"Phòng {room.Number} chưa sẵn sàng.");
+                await db.EnsureAvailableAsync(room.Id,arrival,arrival.AddDays(days));
+                var id=await db.CreateStayAsync(room,guest,reserve,now,arrival,arrival.AddDays(days),takeDeposit?depositPerRoom:0,hold,user);
+                await db.SetRoomAsync(room,reserve?room.Status:RoomStatus.DangO);
+                if(!reserve)await db.StartSegmentAsync(id,room,now);
+                await db.PaymentAsync(id,"Deposit",takeDeposit?depositPerRoom:0,now,method,"Thu cọc",user,reference);
+                ids.Add(id);
+            }
+            await db.AuditAsync(user,reserve?"ReserveMultiple":"CheckInMultiple",$"Khách {guest.Name}; {ids.Count} phòng; lượt {string.Join(',',ids)}");
+            return ids;
+        });
+    }
     public Task CheckInAsync(Stay selected) => Write(async db=>
     {
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Reserved);

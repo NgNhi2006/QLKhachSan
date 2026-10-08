@@ -119,12 +119,16 @@ public partial class ucDashboard : UserControl
     {
         var fresh=await service.DashboardAsync(revenueOverview?.Days??7);
         var schedule=FunctionPolicy.Can(user,"room.schedule")?await service.TodayScheduleAsync(fresh.ServerNow.Date):[];
+        var profile=await auth.ProfileAsync(user,user.Id);
         accountingToday=null;
         if(IsDisposed)return;
+        user.DisplayName=profile.DisplayName;user.AvatarPng=profile.AvatarPng;
+        UpdateHeaderAccountProfile();
         data=fresh;todaySchedule=schedule;serverElapsed.Restart();lastDate=fresh.ServerNow.Date;
         UpdateNavigationTitle();
         Render();
         UpdateMenuMetrics();
+        if(activeFunction=="room.map")roomOverviewRefresh?.Invoke();
         if(activeFunction is "room.walkin" or "room.reserve")RefreshAvailableRooms();
         if(activeFunction is "room.deposit" or "room.checkin" or "room.booking_edit" or "room.booking_cancel")RefreshReservedBookings();
     }
@@ -209,12 +213,13 @@ public partial class ucDashboard : UserControl
         scheduleHeading.Dock=DockStyle.Top;scheduleHeading.Height=30;scheduleHeading.Font=AppTheme.Bold;scheduleHeading.ForeColor=AppTheme.Ink;header.Controls.Add(scheduleHeading);
         scheduleSummary.Dock=DockStyle.Bottom;scheduleSummary.Height=22;scheduleSummary.ForeColor=AppTheme.Muted;header.Controls.Add(scheduleSummary);layout.Controls.Add(header,0,0);
         var tabs=new TabControl {Dock=DockStyle.Fill,Font=AppTheme.Bold};layout.Controls.Add(tabs,0,1);
-        foreach(var stage in new[]{"Chờ nhận","Đã nhận","Chờ trả","Đã trả"})
+        foreach(var stage in new[]{"Đặt trước","Chờ nhận","Đã nhận","Chờ trả","Đã trả"})
         {
             var page=new TabPage(stage) {BackColor=Color.White,Padding=new Padding(8)};
             var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;page.Controls.Add(grid);
             var empty=new Label {Dock=DockStyle.Fill,BackColor=Color.White,TextAlign=ContentAlignment.MiddleCenter,Font=AppTheme.Body,ForeColor=AppTheme.Muted};
             page.Controls.Add(empty);empty.BringToFront();tabs.TabPages.Add(page);scheduleSections[stage]=(page,grid,empty);
+            if(stage=="Đặt trước")grid.CellContentClick+=async (_,e)=>await HandleScheduleBookingAction(grid,e);
             if(stage is "Chờ nhận" or "Chờ trả")grid.CellContentClick+=async (_,e)=>await HandleScheduleAction(grid,e);
         }
     }
@@ -238,10 +243,39 @@ public partial class ucDashboard : UserControl
     private void RenderSchedule()
     {
         if(scheduleSections.Count==0)return;
-        scheduleHeading.Text=$"LỊCH NHẬN / TRẢ HÔM NAY  •  {ServerNow:dd/MM/yyyy}";
-        scheduleSummary.Text=string.Join("   •   ",new[]{"Chờ nhận","Đã nhận","Chờ trả","Đã trả"}.Select(stage=>$"{stage}: {todaySchedule.Count(x=>x.Stage==stage)}"));
+        scheduleHeading.Text=$"LỊCH ĐẾN / ĐI VÀ ĐẶT TRƯỚC  •  {ServerNow:dd/MM/yyyy}";
+        scheduleSummary.Text=$"Đặt trước: {data.Stays.Count(x=>x.Status==StayStatus.Reserved)}   •   "+
+            string.Join("   •   ",new[]{"Chờ nhận","Đã nhận","Chờ trả","Đã trả"}
+                .Select(stage=>$"{stage}: {todaySchedule.Count(x=>x.Stage==stage)}"));
         foreach(var (stage,section) in scheduleSections)
         {
+            if(stage=="Đặt trước")
+            {
+                var reserved=data.Stays.Where(s=>s.Status==StayStatus.Reserved)
+                    .OrderBy(s=>s.Arrival)
+                    .Select(s=>new BookingRow(s.Id,StayRoom(s)?.Number??"?",s.Guest,s.Phone,
+                        s.Identity,s.Arrival,s.HoldUntil,s.Deposit,
+                        s.HoldUntil<=ServerNow?"Quá hạn nhận":"Chờ nhận")).ToList();
+                var bookings=section.Grid;
+                bookings.DataSource=reserved;
+                if(bookings.Columns["Id"] is { } bookingIdColumn)bookingIdColumn.Visible=false;
+                if(bookings.Columns["NgàyĐến"] is { } arrival)
+                    arrival.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";
+                if(bookings.Columns["HạnGiữ"] is { } hold)
+                    hold.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";
+                if(bookings.Columns["Cọc"] is { } deposit)
+                    deposit.DefaultCellStyle.Format="N0";
+                if(FunctionPolicy.Can(user,"room.booking_edit"))AddAction(bookings,"edit","Sửa");
+                if(FunctionPolicy.Can(user,"room.booking_cancel"))AddAction(bookings,"cancel","Hủy");
+                if(FunctionPolicy.Can(user,"room.checkin"))AddAction(bookings,"checkin","Nhận phòng");
+                foreach(DataGridViewRow row in bookings.Rows)
+                    if(row.DataBoundItem is BookingRow item && item.HạnGiữ<=ServerNow)
+                        row.DefaultCellStyle.BackColor=Color.FromArgb(255,246,242);
+                section.Tab.Text=$"Đặt trước ({reserved.Count})";
+                section.Empty.Text="Không có phòng đặt trước đang chờ nhận.";
+                section.Empty.Visible=reserved.Count==0;
+                continue;
+            }
             var rows=todaySchedule.Where(x=>x.Stage==stage).OrderBy(x=>x.Time)
                 .Select(x=>new ScheduleRow(x.StayId,x.Room,x.Guest,x.Phone,x.Stage,x.Time)).ToList();
             var grid=section.Grid;grid.DataSource=rows;
@@ -258,6 +292,28 @@ public partial class ucDashboard : UserControl
             section.Empty.Text=$"Hôm nay không có lượt {stage.ToLowerInvariant()}.";
             section.Empty.Visible=rows.Count==0;
         }
+    }
+    private async Task HandleScheduleBookingAction(DataGridView grid,DataGridViewCellEventArgs e)
+    {
+        if(e.RowIndex<0 || e.ColumnIndex<0 ||
+            grid.Rows[e.RowIndex].DataBoundItem is not BookingRow row)return;
+        var action=grid.Columns[e.ColumnIndex].Name;
+        if(action is not ("edit" or "cancel" or "checkin"))return;
+        var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id && s.Status==StayStatus.Reserved);
+        if(stay is null){RenderSchedule();return;}
+        if(action=="edit" && !FunctionPolicy.Can(user,"room.booking_edit"))return;
+        if(action=="cancel" && !FunctionPolicy.Can(user,"room.booking_cancel"))return;
+        if(action=="checkin")
+        {
+            if(!FunctionPolicy.Can(user,"room.checkin"))return;
+            await Run(async()=>
+            {
+                if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))
+                    await Changed(()=>service.CheckInAsync(stay));
+            });
+        }
+        else await Run(()=>action=="edit"?ShowEditBooking(stay):ShowCancel(stay));
+        RenderSchedule();
     }
     private async Task HandleScheduleAction(DataGridView grid,DataGridViewCellEventArgs e)
     {

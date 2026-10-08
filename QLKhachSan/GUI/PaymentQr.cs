@@ -10,7 +10,8 @@ internal static class PaymentQr
         var configured=!string.IsNullOrWhiteSpace(settings.BankCode)
             && !string.IsNullOrWhiteSpace(settings.BankAccount)
             && !string.IsNullOrWhiteSpace(settings.BankAccountName);
-        var panel=new TableLayoutPanel {Height=configured?390:68,Dock=DockStyle.Top,ColumnCount=1,RowCount=configured?2:1,Margin=new Padding(0,0,0,16),BackColor=Color.FromArgb(246,249,255)};
+        var panel=new RoundedSurface {Height=configured?390:68,Dock=DockStyle.Top,ColumnCount=1,
+            RowCount=configured?2:1,Margin=new Padding(0,0,0,16),BackColor=Color.FromArgb(239,245,255)};
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute,configured?76:60));
         if(configured)panel.RowStyles.Add(new RowStyle(SizeType.Absolute,300));

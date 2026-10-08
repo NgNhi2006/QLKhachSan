@@ -61,7 +61,9 @@ ORDER BY 6,1",r=>new TodayScheduleItem(r.GetInt64(0),r.GetString(1),r.GetString(
         ORDER BY p.Ma DESC
         """,r=>new DepositReceipt(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetString(4),
             r.GetDateTime(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.IsDBNull(9)?null:r.GetDecimal(9),r.GetString(10),r.GetString(11)),from,until);
-    public Task<List<UserInfo>> UsersAsync() => Query("SELECT Ma,TenDangNhap,VaiTro,DangHoatDong,KhoaDen,PhienBanBaoMat FROM dbo.TaiKhoanNhanVien WHERE DaLuuTru=0 ORDER BY TenDangNhap",r=>new UserInfo(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetBoolean(3),Date(r,4),r.GetInt64(5)));
+    public Task<List<UserInfo>> UsersAsync() => Query("SELECT Ma,TenDangNhap,VaiTro,DangHoatDong,KhoaDen,PhienBanBaoMat,COALESCE(NULLIF(TenHienThi,N''),TenDangNhap),AnhDaiDien FROM dbo.TaiKhoanNhanVien WHERE DaLuuTru=0 ORDER BY TenDangNhap",r=>new UserInfo(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetBoolean(3),Date(r,4),r.GetInt64(5),r.GetString(6),r.IsDBNull(7)?null:(byte[])r[7]));
+    public Task<int> UpdateProfileAsync(int id,string displayName,byte[]? avatarPng) =>
+        Execute("UPDATE dbo.TaiKhoanNhanVien SET TenHienThi=@p1,AnhDaiDien=CONVERT(varbinary(max),@p2) WHERE Ma=@p0 AND DaLuuTru=0",id,displayName,avatarPng);
     public Task<long> ActiveAdminsAsync() => Scalar("SELECT COUNT_BIG(*) FROM dbo.TaiKhoanNhanVien WHERE DangHoatDong=1 AND DaLuuTru=0 AND VaiTro='Admin'");
     public Task<int> ArchiveUsersAsync() => Execute("UPDATE dbo.TaiKhoanNhanVien SET DaLuuTru=1,DangHoatDong=0,PhienBanBaoMat=PhienBanBaoMat+1,KhoaDen=NULL WHERE DaLuuTru=0");
     public Task<int> UpdateUserAsync(int id,string role,bool active) => Execute("DELETE FROM dbo.PhanQuyenNhanVien WHERE MaNhanVien=@p0 AND EXISTS(SELECT 1 FROM dbo.TaiKhoanNhanVien WHERE Ma=@p0 AND VaiTro<>@p1); UPDATE dbo.TaiKhoanNhanVien SET DaTuyChinhQuyen=CASE WHEN VaiTro<>@p1 THEN 0 ELSE DaTuyChinhQuyen END,VaiTro=@p1,DangHoatDong=@p2,PhienBanBaoMat=PhienBanBaoMat+1,SoLanDangNhapSai=0,KhoaDen=NULL WHERE Ma=@p0",id,role,active);

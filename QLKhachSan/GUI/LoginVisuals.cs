@@ -4,6 +4,7 @@ namespace QLKhachSan.GUI;
 
 internal sealed class LoginBrandPanel : Panel
 {
+    private readonly Image? roomImage;
     private readonly Image logo = UiIcons.Create("bed", Color.White, 35);
     private readonly Font brandFont = new("Segoe UI Semibold", 16F, FontStyle.Bold);
     private readonly Font captionFont = new("Segoe UI", 7.5F, FontStyle.Bold);
@@ -16,6 +17,8 @@ internal sealed class LoginBrandPanel : Panel
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        using var stream=typeof(LoginBrandPanel).Assembly.GetManifestResourceStream("QLKhachSan.Assets.hotel-room.jpg");
+        if(stream is not null){using var decoded=Image.FromStream(stream);roomImage=new Bitmap(decoded);}
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -23,8 +26,19 @@ internal sealed class LoginBrandPanel : Panel
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using var background = new LinearGradientBrush(ClientRectangle,
-            Color.FromArgb(43, 42, 68), Color.FromArgb(85, 73, 121), 125F);
+            AppTheme.Navy, Color.FromArgb(38, 91, 110), 125F);
         g.FillRectangle(background, ClientRectangle);
+
+        if(roomImage is not null)
+        {
+            var scale=Math.Max((float)Width/roomImage.Width,(float)Height/roomImage.Height);
+            var imageWidth=(int)Math.Ceiling(roomImage.Width*scale);
+            var imageHeight=(int)Math.Ceiling(roomImage.Height*scale);
+            g.DrawImage(roomImage,new Rectangle((Width-imageWidth)/2,(Height-imageHeight)/2,imageWidth,imageHeight));
+            using var tint=new LinearGradientBrush(ClientRectangle,
+                Color.FromArgb(220,AppTheme.Navy),Color.FromArgb(180,AppTheme.Navy),LinearGradientMode.Vertical);
+            g.FillRectangle(tint,ClientRectangle);
+        }
 
         using var glow = new SolidBrush(Color.FromArgb(24, 236, 192, 153));
         g.FillEllipse(glow, Width - 180, -110, 340, 340);
@@ -53,6 +67,8 @@ internal sealed class LoginBrandPanel : Panel
         using var logoFill = new SolidBrush(Color.FromArgb(42, 83, 111));
         g.FillPath(logoFill, logoShape);
         g.DrawImage(logo, 62, 62, 35, 35);
+        using var gold=new SolidBrush(AppTheme.Amber);
+        g.FillRectangle(gold,54,196,54,4);
         static void Draw(Graphics graphics, string value, Font font, Rectangle area, Color color) =>
             TextRenderer.DrawText(graphics, value, font, area, color,
                 TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak);
@@ -75,6 +91,7 @@ internal sealed class LoginBrandPanel : Panel
     {
         if (disposing)
         {
+            roomImage?.Dispose();
             logo.Dispose();
             brandFont.Dispose();
             captionFont.Dispose();
@@ -191,10 +208,10 @@ internal sealed class LoginActionButton : Button
         g.Clear(Parent?.BackColor ?? Color.White);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var top = !Enabled ? Color.FromArgb(153, 172, 186) :
-            pressed ? Color.FromArgb(61, 55, 105) :
-            hovered ? Color.FromArgb(103, 94, 151) : AppTheme.Blue;
-        var bottom = !Enabled ? top : pressed ? Color.FromArgb(49, 45, 86) :
-            hovered ? Color.FromArgb(83, 76, 132) : Color.FromArgb(65, 58, 111);
+            pressed ? AppTheme.Navy :
+            hovered ? Color.FromArgb(40, 109, 139) : AppTheme.Blue;
+        var bottom = !Enabled ? top : pressed ? Color.FromArgb(22, 59, 78) :
+            hovered ? AppTheme.Blue : AppTheme.Navy;
         using var shape = AppTheme.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), 12);
         using var gradient = new LinearGradientBrush(ClientRectangle, top, bottom, LinearGradientMode.Horizontal);
         g.FillPath(gradient, shape);

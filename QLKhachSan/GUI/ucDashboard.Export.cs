@@ -33,18 +33,18 @@ public partial class ucDashboard
     private void ExportInvoices(PeriodReport report,DateTime from,DateTime through)
     {
         var rows=report.Invoices.OrderBy(x=>x.Issued).ThenBy(x=>x.Id).Select(x=>new object?[]
-        {$"PT-{x.Issued:yyyyMMdd}-{x.Id:000000}",x.Issued,x.StayId,x.Room,x.Guest,x.RoomCharge,x.ServiceCharge,x.Total,x.Deposit,x.Collected,x.Refunded,x.Method}).ToArray();
+        {$"PT-{x.Issued:yyyyMMdd}-{x.Id:000000}",x.Issued,x.Room,x.Guest,x.RoomCharge,x.ServiceCharge,x.Total,x.Deposit,x.Collected,x.Refunded,x.Method}).ToArray();
         ExportReport("bao-cao-hoa-don","BẢNG KÊ PHIẾU THANH TOÁN",from,through,
-            ["Số phiếu","Ngày lập","Mã lượt ở","Phòng","Khách hàng","Tiền phòng (VND)","Dịch vụ (VND)","Tổng hóa đơn (VND)","Cọc đã thu (VND)","Thu thêm (VND)","Hoàn khách (VND)","Hình thức"],rows,
-            ["TỔNG CỘNG",null,null,null,$"{rows.Length} phiếu",report.Invoices.Sum(x=>x.RoomCharge),report.Invoices.Sum(x=>x.ServiceCharge),report.Invoices.Sum(x=>x.Total),report.Invoices.Sum(x=>x.Deposit),report.Invoices.Sum(x=>x.Collected),report.Invoices.Sum(x=>x.Refunded)]);
+            ["Số phiếu","Ngày lập","Phòng","Khách hàng","Tiền phòng (VND)","Dịch vụ (VND)","Tổng hóa đơn (VND)","Cọc đã thu (VND)","Thu thêm (VND)","Hoàn khách (VND)","Hình thức"],rows,
+            ["TỔNG CỘNG",null,null,$"{rows.Length} phiếu",report.Invoices.Sum(x=>x.RoomCharge),report.Invoices.Sum(x=>x.ServiceCharge),report.Invoices.Sum(x=>x.Total),report.Invoices.Sum(x=>x.Deposit),report.Invoices.Sum(x=>x.Collected),report.Invoices.Sum(x=>x.Refunded),null]);
     }
     private void ExportPayments(PeriodReport report,DateTime from,DateTime through)
     {
         var rows=report.Payments.OrderBy(x=>x.Created).ThenBy(x=>x.Id).Select(x=>new object?[]
-        {$"GD-{x.Created:yyyyMMdd}-{x.Id:000000}",x.Created,x.StayId,x.Guest,x.Kind switch {"Deposit"=>"Thu cọc","Checkout"=>"Thu thanh toán","Refund"=>"Hoàn khách","Forfeit"=>"Cọc không hoàn",_=>x.Kind},x.Amount,x.CashFlow,x.Method,x.Username,x.Note}).ToArray();
+        {$"GD-{x.Created:yyyyMMdd}-{x.Id:000000}",x.Created,x.Guest,x.Kind switch {"Deposit"=>"Thu cọc","Checkout"=>"Thu thanh toán","Refund"=>"Hoàn khách","Forfeit"=>"Cọc không hoàn",_=>x.Kind},x.Amount,x.CashFlow,x.Method,x.Username,x.Note}).ToArray();
         ExportReport("bao-cao-thu-chi","BẢNG KÊ THU, HOÀN TIỀN",from,through,
-            ["Mã giao dịch","Thời điểm","Mã lượt ở","Khách hàng","Loại giao dịch","Số tiền (VND)","Dòng tiền (VND)","Hình thức","Nhân viên","Ghi chú"],rows,
-            ["TỔNG CỘNG",null,null,$"{rows.Length} giao dịch",null,report.Payments.Sum(x=>x.Amount),report.Payments.Sum(x=>x.CashFlow)]);
+            ["Mã giao dịch","Thời điểm","Khách hàng","Loại giao dịch","Số tiền (VND)","Dòng tiền (VND)","Hình thức","Nhân viên","Ghi chú"],rows,
+            ["TỔNG CỘNG",null,$"{rows.Length} giao dịch",null,report.Payments.Sum(x=>x.Amount),report.Payments.Sum(x=>x.CashFlow),null,null,null]);
     }
     private void ExportGrid(DataGridView grid,string filename)
     {
@@ -94,7 +94,7 @@ public partial class ucDashboard
             var second=left+bounds.Width/2+10;var half=bounds.Width/2-15;
             Text($"Khách hàng: {invoice.Guest}",normal,left,y,half);Text($"Ngày đến: {(stay.CheckIn??stay.Arrival):dd/MM/yyyy HH:mm}",normal,second,y,half);y+=23;
             Text($"Điện thoại: {stay.Phone}",normal,left,y,half);Text($"Ngày đi: {invoice.Issued:dd/MM/yyyy HH:mm}",normal,second,y,half);y+=23;
-            Text($"Phòng: {invoice.Room}  •  Lượt ở: {invoice.StayId}",normal,left,y,half);Text($"Hình thức: {invoice.Method}",normal,second,y,half);y+=28;
+            Text($"Phòng: {invoice.Room}",normal,left,y,half);Text($"Hình thức: {invoice.Method}",normal,second,y,half);y+=28;
             Rule(y);y+=8;
             Text("STT",bold,left,y,35);Text("Hạng mục",bold,left+38,y,bounds.Width-260);Text("SL",bold,right-218,y,45,StringAlignment.Far);Text("Đơn giá",bold,right-168,y,78,StringAlignment.Far);Text("Thành tiền",bold,right-83,y,83,StringAlignment.Far);y+=23;Rule(y);y+=7;
             if(index==0){Text("1",normal,left,y,35);Text("Tiền phòng",normal,left+38,y,bounds.Width-260);Text(invoice.RoomCharge.ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;}

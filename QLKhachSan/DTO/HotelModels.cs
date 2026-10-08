@@ -6,6 +6,8 @@ public sealed record UserSession(int Id, string Username, string Role)
 {
     public long SecurityVersion { get; set; } = 1;
     public HashSet<string>? GrantedFunctions { get; set; }
+    public string DisplayName { get; set; } = Username;
+    public byte[]? AvatarPng { get; set; }
 }
 public sealed record Room(int Id, string Number, string Type, decimal Rate, decimal Deposit, RoomStatus Status, long Version)
 {
@@ -54,7 +56,8 @@ public sealed record DepositReceipt(long PaymentId,long StayId,string Guest,stri
     public bool IsEstimate => FinalInvoiceTotal is null;
 }
 public sealed record PeriodReport(List<Invoice> Invoices, List<RevenueItem> Revenue, List<PaymentEntry> Payments);
-public sealed record UserInfo(int Id, string Username, string Role, bool Active, DateTime? LockedUntil, long Version);
+public sealed record UserInfo(int Id, string Username, string Role, bool Active, DateTime? LockedUntil,
+    long Version, string DisplayName, byte[]? AvatarPng);
 public sealed record ServiceCatalogItem(int Id, string Category, string Name, decimal Price, string Unit, bool Active, long Version);
 public sealed record AuditEntry(long Id, DateTime Created, string Username, string Action, string Detail);
 public sealed record BillQuote(Stay Stay, Room Room, DateTime At, decimal RoomCharge, decimal Services,

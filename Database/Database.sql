@@ -2006,6 +2006,123 @@ COMMIT;
 -- END MIGRATION V11
 GO
 
+-- BEGIN MIGRATION V12
+BEGIN TRANSACTION;
+DECLARE @lock12 int;
+EXEC @lock12=sys.sp_getapplock @Resource=N'QLKhachSan.Write',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+IF @lock12<0 THROW 51001,N'Không lấy được khóa nâng cấp dữ liệu.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=11) THROW 51000,N'Cần nâng cấp phiên bản 11 trước.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=12)
+BEGIN
+    ALTER TABLE dbo.CauHinhMenu ADD IconPng varbinary(max) NULL;
+    INSERT dbo.PhienBanCSDL(PhienBan) VALUES(12);
+END;
+COMMIT;
+-- END MIGRATION V12
+GO
+
+-- BEGIN MIGRATION V13
+BEGIN TRANSACTION;
+DECLARE @lock13 int;
+EXEC @lock13=sys.sp_getapplock @Resource=N'QLKhachSan.Write',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+IF @lock13<0 THROW 51001,N'Không lấy được khóa nâng cấp dữ liệu.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=12) THROW 51000,N'Cần nâng cấp phiên bản 12 trước.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=13)
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM dbo.CauHinhMenu WHERE MaMenu='finance')
+        INSERT dbo.CauHinhMenu(MaMenu,TieuDe,MoTa,BieuTuong,MauSac,ThuTuHienThi,DangHienThi,CoSan)
+        VALUES('finance',N'Tài chính',N'Thu chi, hóa đơn và báo cáo','money','#3E699D',5,1,1);
+    UPDATE sm SET TieuDe=LEFT(sm.TieuDe,70)+N' ('+sm.MaMenu+N' '+CONVERT(nvarchar(20),sm.Ma)+N')'
+    FROM dbo.CauHinhMenuCon sm
+    WHERE sm.MaMenu IN ('cash','invoices','reports')
+      AND EXISTS(SELECT 1 FROM dbo.CauHinhMenuCon other
+                 WHERE other.Ma<>sm.Ma AND other.MaMenu IN ('cash','invoices','reports','finance')
+                   AND other.TieuDe=sm.TieuDe);
+    UPDATE dbo.CauHinhMenuCon SET MaMenu='finance' WHERE MaMenu IN ('cash','invoices','reports');
+    UPDATE dbo.CauHinhMenu SET DangHienThi=0 WHERE MaMenu IN ('cash','invoices','reports');
+    INSERT dbo.PhienBanCSDL(PhienBan) VALUES(13);
+END;
+COMMIT;
+-- END MIGRATION V13
+GO
+
+-- BEGIN MIGRATION V14
+BEGIN TRANSACTION;
+DECLARE @lock14 int;
+EXEC @lock14=sys.sp_getapplock @Resource=N'QLKhachSan.Write',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+IF @lock14<0 THROW 51001,N'Không lấy được khóa nâng cấp dữ liệu.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=13) THROW 51000,N'Cần nâng cấp phiên bản 13 trước.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=14)
+BEGIN
+    UPDATE dbo.CauHinhMenu SET TieuDe=N'Nhân viên & hệ thống',
+        MoTa=N'Nhân sự, tài khoản và bảo mật' WHERE MaMenu='staff';
+    UPDATE sm SET TieuDe=LEFT(sm.TieuDe,70)+N' (system '+CONVERT(nvarchar(20),sm.Ma)+N')'
+    FROM dbo.CauHinhMenuCon sm
+    WHERE sm.MaMenu='system'
+      AND EXISTS(SELECT 1 FROM dbo.CauHinhMenuCon other
+                 WHERE other.Ma<>sm.Ma AND other.MaMenu='staff' AND other.TieuDe=sm.TieuDe);
+    UPDATE dbo.CauHinhMenuCon SET MaMenu='staff' WHERE MaMenu='system';
+    UPDATE dbo.CauHinhMenu SET DangHienThi=0 WHERE MaMenu='system';
+    DELETE m FROM dbo.CauHinhMenu m
+    WHERE m.MaMenu IN ('cash','invoices','reports','system')
+      AND NOT EXISTS(SELECT 1 FROM dbo.CauHinhMenuCon sm WHERE sm.MaMenu=m.MaMenu);
+    INSERT dbo.PhienBanCSDL(PhienBan) VALUES(14);
+END;
+COMMIT;
+-- END MIGRATION V14
+GO
+
+-- BEGIN MIGRATION V15
+BEGIN TRANSACTION;
+DECLARE @lock15 int;
+EXEC @lock15=sys.sp_getapplock @Resource=N'QLKhachSan.Write',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+IF @lock15<0 THROW 51001,N'Không lấy được khóa nâng cấp dữ liệu.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=14) THROW 51000,N'Cần nâng cấp phiên bản 14 trước.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=15)
+BEGIN
+    CREATE TABLE dbo.CauHinhChucNangMoi(
+        Ma bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_CustomFunction PRIMARY KEY,
+        MaMenuCon bigint NOT NULL REFERENCES dbo.CauHinhMenuCon(Ma),
+        TieuDe nvarchar(120) NOT NULL,
+        ThuTuHienThi int NOT NULL,
+        DangHienThi bit NOT NULL CONSTRAINT DF_CustomFunction_Active DEFAULT 1,
+        VaiTro varchar(80) NOT NULL CONSTRAINT DF_CustomFunction_Roles DEFAULT 'Admin',
+        CauTruc nvarchar(max) NOT NULL,
+        CONSTRAINT CK_CustomFunction_Design CHECK(ISJSON(CauTruc)=1)
+    );
+    CREATE INDEX IX_CustomFunction_Submenu ON dbo.CauHinhChucNangMoi(MaMenuCon,ThuTuHienThi);
+    CREATE TABLE dbo.DuLieuChucNangMoi(
+        Ma bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_CustomRecord PRIMARY KEY,
+        MaChucNang bigint NOT NULL REFERENCES dbo.CauHinhChucNangMoi(Ma),
+        NoiDung nvarchar(max) NOT NULL,
+        CapNhatLuc datetime2 NOT NULL CONSTRAINT DF_CustomRecord_Updated DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT CK_CustomRecord_Json CHECK(ISJSON(NoiDung)=1)
+    );
+    CREATE INDEX IX_CustomRecord_Function ON dbo.DuLieuChucNangMoi(MaChucNang,Ma DESC);
+    INSERT dbo.PhienBanCSDL(PhienBan) VALUES(15);
+END;
+COMMIT;
+-- END MIGRATION V15
+GO
+
+-- BEGIN MIGRATION V16
+BEGIN TRANSACTION;
+DECLARE @lock16 int;
+EXEC @lock16=sys.sp_getapplock @Resource=N'QLKhachSan.Write',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+IF @lock16<0 THROW 51001,N'Không lấy được khóa nâng cấp dữ liệu.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=15) THROW 51000,N'Cần nâng cấp phiên bản 15 trước.',1;
+IF NOT EXISTS(SELECT 1 FROM dbo.PhienBanCSDL WHERE PhienBan=16)
+BEGIN
+    ALTER TABLE dbo.TaiKhoanNhanVien ADD TenHienThi nvarchar(100) NULL;
+    ALTER TABLE dbo.TaiKhoanNhanVien ADD AnhDaiDien varbinary(max) NULL;
+    EXEC(N'ALTER TABLE dbo.TaiKhoanNhanVien ADD CONSTRAINT CK_Users_AvatarSize
+        CHECK(AnhDaiDien IS NULL OR DATALENGTH(AnhDaiDien)<=262144)');
+    INSERT dbo.PhienBanCSDL(PhienBan) VALUES(16);
+END;
+COMMIT;
+-- END MIGRATION V16
+GO
+
 -- ============================================================================
 -- TRA CỨU CHỈ ĐỌC SAU KHI CÀI ĐẶT: bỏ dấu "--" ở truy vấn muốn chạy.
 -- Các câu dưới đây không chạy khi cài đặt. TOP (100) giới hạn số dòng trả về.

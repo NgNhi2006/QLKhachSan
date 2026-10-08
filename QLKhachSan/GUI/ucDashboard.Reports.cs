@@ -16,7 +16,8 @@ public partial class ucDashboard
             MaximumSize=new Size(Math.Min(1000,screen.Width-40),screen.Height-40)
         };
         var settings=AppSettings.Load();
-        var billPanel=new TableLayoutPanel {Height=360,ColumnCount=2,RowCount=1,BackColor=Color.White};
+        var billPanel=new RoundedSurface {Height=360,ColumnCount=2,RowCount=1,
+            BackColor=Color.White,Padding=new Padding(10),Margin=new Padding(0,0,0,14)};
         billPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         billPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,0));
         billPanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -24,9 +25,11 @@ public partial class ucDashboard
         invoice.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         foreach(var height in new[]{34,27,48,130,75})invoice.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
         invoice.Controls.Add(new Label {Text=settings.HotelName.ToUpperInvariant(),Dock=DockStyle.Fill,Font=AppTheme.Title,ForeColor=AppTheme.Ink},0,0);
-        invoice.Controls.Add(new Label {Text=$"PHIẾU THANH TOÁN  •  P.{bill.Room.Number}  •  LƯỢT #{stay.Id}",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=Color.FromArgb(177,75,59)},0,1);
+        invoice.Controls.Add(new Label {Text=$"PHIẾU THANH TOÁN  •  P.{bill.Room.Number}",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=Color.FromArgb(177,75,59)},0,1);
         invoice.Controls.Add(new Label {Text=$"Khách: {stay.Guest}  •  SĐT: {stay.Phone}\nNhận: {stay.CheckIn:dd/MM/yyyy HH:mm}  •  Tính đến: {bill.At:dd/MM/yyyy HH:mm}",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},0,2);
-        var lines=new ListView {Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,GridLines=true,HeaderStyle=ColumnHeaderStyle.Nonclickable};
+        var lines=new ListView {Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,
+            GridLines=false,BorderStyle=BorderStyle.None,Font=AppTheme.Body,
+            HeaderStyle=ColumnHeaderStyle.Nonclickable,BackColor=Color.FromArgb(248,250,254)};
         lines.Columns.Add("HẠNG MỤC",180);lines.Columns.Add("SL",45,HorizontalAlignment.Right);
         lines.Columns.Add("ĐƠN GIÁ",100,HorizontalAlignment.Right);lines.Columns.Add("THÀNH TIỀN",110,HorizontalAlignment.Right);
         void AddLine(string name,string quantity,string price,decimal total)
@@ -38,7 +41,8 @@ public partial class ucDashboard
         invoice.Controls.Add(lines,0,3);
         invoice.Controls.Add(new Label {Text=$"Tổng hóa đơn: {bill.Total:N0} đ    •    Cọc đã thu: {stay.Deposit:N0} đ\n{(bill.ToCollect>0?$"CẦN THU: {bill.ToCollect:N0} đ":$"CẦN HOÀN: {bill.ToRefund:N0} đ")}\nBảng tính có hiệu lực 10 phút.",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink,TextAlign=ContentAlignment.MiddleRight},0,4);
         billPanel.Controls.Add(invoice,0,0);
-        var bank=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(10),BackColor=Color.FromArgb(246,249,255)};
+        var bank=new RoundedSurface {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,
+            Padding=new Padding(12),BackColor=Color.FromArgb(239,245,255)};
         bank.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         bank.RowStyles.Add(new RowStyle(SizeType.Absolute,32));bank.RowStyles.Add(new RowStyle(SizeType.Absolute,88));bank.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         bank.Controls.Add(new Label {Text="QUÉT QR CHUYỂN KHOẢN",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink},0,0);
@@ -50,19 +54,26 @@ public partial class ucDashboard
         void UpdatePayment()
         {
             var transfer=(string?)method.SelectedItem=="Chuyển khoản" && bill.ToCollect>0;
+            if(transfer && string.IsNullOrWhiteSpace(reference.Text))reference.Text=$"KS-{stay.Id}";
             bank.Visible=transfer;
             billPanel.ColumnStyles[1].Width=transfer?315:0;
             if(!transfer){qr.CancelAsync();return;}
-            bankInfo.Text=$"{settings.BankAccountName}\nSTK: {settings.BankAccount}\nSố tiền: {bill.ToCollect:N0} đ\nNội dung: KS-{stay.Id}";
+            bankInfo.Text=$"{settings.BankAccountName}\nSTK: {settings.BankAccount}\nSố tiền: {bill.ToCollect:N0} đ\nNội dung: {reference.Text}";
             if(string.IsNullOrWhiteSpace(settings.BankCode) || string.IsNullOrWhiteSpace(settings.BankAccount) || string.IsNullOrWhiteSpace(settings.BankAccountName))
             {
                 bankInfo.Text="Chưa cấu hình tài khoản ngân hàng.";return;
             }
-            var url=$"https://img.vietqr.io/image/{Uri.EscapeDataString(settings.BankCode)}-{Uri.EscapeDataString(settings.BankAccount)}-qr_only.png?amount={bill.ToCollect:0}&addInfo={Uri.EscapeDataString($"KS-{stay.Id}")}&accountName={Uri.EscapeDataString(settings.BankAccountName)}";
-            qr.LoadAsync(url);
+            var url=$"https://img.vietqr.io/image/{Uri.EscapeDataString(settings.BankCode)}-{Uri.EscapeDataString(settings.BankAccount)}-qr_only.png?amount={bill.ToCollect:0}&addInfo={Uri.EscapeDataString(reference.Text)}&accountName={Uri.EscapeDataString(settings.BankAccountName)}";
+            qr.CancelAsync();
+            try{qr.LoadAsync(url);}
+            catch(InvalidOperationException){bankInfo.Text+="\nKhông tải được QR; dùng thông tin tài khoản ở trên.";}
         }
-        method.SelectedIndexChanged+=(_,_)=>UpdatePayment();UpdatePayment();
+        method.SelectedIndexChanged+=(_,_)=>UpdatePayment();
+        reference.TextChanged+=(_,_)=>{if((string?)method.SelectedItem=="Chuyển khoản")UpdatePayment();};
+        UpdatePayment();
         dialog.FormClosed+=(_,_)=>qr.CancelAsync();
+        dialog.Action("XEM / IN BILL TRƯỚC THANH TOÁN",
+            ()=>ShowBillBeforePayment(new[]{bill},(string)method.SelectedItem!,reference.Text),false);
         var confirm=new CheckBox {Text="Đã thu đủ tiền / hoàn đủ tiền cho khách"};dialog.AddActionConfirmation("Xác nhận thu chi",confirm);
         var checkoutAction=dialog.Action("HOÀN TẤT CHECK-OUT",async()=>
         {
@@ -309,8 +320,41 @@ public partial class ucDashboard
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,82));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));dialog.Controls.Add(root);
         var heading=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(24,12,20,8)};
         heading.Controls.Add(new Label {Text=dialog.Text,Dock=DockStyle.Top,Height=36,Font=AppTheme.Title,ForeColor=AppTheme.Ink});
-        heading.Controls.Add(new Label {Text=$"Đang đăng nhập: {user.Username}  •  {RolePolicy.Name(user.Role)}",Dock=DockStyle.Bottom,Height=22,ForeColor=AppTheme.Muted});root.Controls.Add(heading,0,0);
+        heading.Controls.Add(new Label {Text=$"Đang đăng nhập: {user.DisplayName}  •  {user.Role}",Dock=DockStyle.Bottom,Height=22,ForeColor=AppTheme.Muted});root.Controls.Add(heading,0,0);
         var tabs=new TabControl {Dock=DockStyle.Fill,Margin=new Padding(18,14,18,16),Font=AppTheme.Bold};root.Controls.Add(tabs,0,1);
+        var myProfile=await auth.ProfileAsync(user,user.Id);
+        var profileTab=new TabPage("Hồ sơ của tôi") {BackColor=AppTheme.Canvas,Padding=new Padding(22)};
+        tabs.TabPages.Add(profileTab);
+        var profileCard=new RoundedSurface {Dock=DockStyle.Top,Height=208,ColumnCount=2,RowCount=2,
+            BackColor=Color.White,Padding=new Padding(20)};
+        profileCard.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,108));
+        profileCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        profileCard.RowStyles.Add(new RowStyle(SizeType.Absolute,113));
+        profileCard.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        profileTab.Controls.Add(profileCard);
+        var profileAvatar=new AvatarBadge {Size=new Size(88,88),Margin=new Padding(0,3,0,0)};
+        profileCard.Controls.Add(profileAvatar,0,0);
+        var profileInfo=new Label {Dock=DockStyle.Fill,Font=AppTheme.Body,
+            ForeColor=AppTheme.Ink,Padding=new Padding(2,9,0,0)};
+        profileCard.Controls.Add(profileInfo,1,0);
+        void UpdateProfileInfo()
+        {
+            profileInfo.Text=$"{myProfile.DisplayName}\n@{myProfile.Username}   •   {myProfile.Role}";
+            profileAvatar.SetProfile(myProfile.DisplayName,myProfile.AvatarPng);
+        }
+        UpdateProfileInfo();
+        var editMyProfile=new RoundedActionButton {Text="CHỈNH SỬA TÊN VÀ ẢNH ĐẠI DIỆN",Dock=DockStyle.Fill,
+            Margin=new Padding(0,2,0,0)};
+        profileCard.Controls.Add(editMyProfile,0,1);profileCard.SetColumnSpan(editMyProfile,2);
+        editMyProfile.Click+=async (_,_)=>
+        {
+            if(await EditStaffProfile(myProfile,dialog))
+            {
+                myProfile=await auth.ProfileAsync(user,user.Id);
+                UpdateProfileInfo();
+                UpdateHeaderAccountProfile();UpdateNavigationTitle();
+            }
+        };
         if(FunctionPolicy.Can(user,"system.password"))
         {
         var personal=new TabPage("Mật khẩu của tôi") {BackColor=Color.White,Padding=new Padding(22,20,22,18)};tabs.TabPages.Add(personal);
@@ -356,24 +400,27 @@ public partial class ucDashboard
             editor.Controls.Add(new Label {Text="Trạng thái",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},1,0);
             var editRole=Ui.Combo(RolePolicy.Roles);editRole.Dock=DockStyle.Fill;editor.Controls.Add(editRole,0,1);
             var active=new CheckBox {Text="Cho phép đăng nhập",Checked=true,Dock=DockStyle.Fill,Padding=new Padding(18,0,0,0)};editor.Controls.Add(active,1,1);
-            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=1};
-            for(var i=0;i<3;i++)actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/3));layout.Controls.Add(actions,0,4);
-            var save=new Button {Text="LƯU QUYỀN / TRẠNG THÁI",Dock=DockStyle.Fill,Margin=new Padding(0,6,6,0)};AppTheme.Button(save,true);actions.Controls.Add(save,0,0);
-            var functionPermissions=new Button {Text="QUYỀN CHỨC NĂNG",Dock=DockStyle.Fill,Margin=new Padding(3,6,3,0)};AppTheme.Button(functionPermissions);actions.Controls.Add(functionPermissions,1,0);
-            var resetPassword=new Button {Text="ĐỔI MẬT KHẨU NHÂN VIÊN",Dock=DockStyle.Fill,Margin=new Padding(6,6,0,0)};AppTheme.Button(resetPassword);actions.Controls.Add(resetPassword,2,0);
+            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,RowCount=1};
+            for(var i=0;i<4;i++)actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));layout.Controls.Add(actions,0,4);
+            var save=new Button {Text="LƯU VAI TRÒ",Dock=DockStyle.Fill,Margin=new Padding(0,6,4,0)};AppTheme.Button(save,true);actions.Controls.Add(save,0,0);
+            var functionPermissions=new Button {Text="PHÂN QUYỀN",Dock=DockStyle.Fill,Margin=new Padding(4,6,4,0)};AppTheme.Button(functionPermissions);actions.Controls.Add(functionPermissions,1,0);
+            var resetPassword=new Button {Text="ĐỔI MẬT KHẨU",Dock=DockStyle.Fill,Margin=new Padding(4,6,4,0)};AppTheme.Button(resetPassword);actions.Controls.Add(resetPassword,2,0);
+            var editProfile=new Button {Text="TÊN / ẢNH",Dock=DockStyle.Fill,Margin=new Padding(4,6,0,0)};AppTheme.Button(editProfile);actions.Controls.Add(editProfile,3,0);
             UserInfo Selected()=>grid.CurrentRow?.DataBoundItem as UserInfo??throw new BusinessException("Chọn tài khoản.");
             void ShowSelection()
             {
                 if(grid.CurrentRow?.DataBoundItem is not UserInfo item)return;
-                selectedLabel.Text=$"Đang chọn: {item.Username}"+(item.Id==user.Id?"  •  Tài khoản đang sử dụng không thể tự đổi quyền":"");
+                selectedLabel.Text=$"Đang chọn: {item.DisplayName} ({item.Username})"+(item.Id==user.Id?"  •  Không thể tự đổi quyền":"");
                 editRole.SelectedItem=item.Role;active.Checked=item.Active;
                 save.Enabled=item.Id!=user.Id;functionPermissions.Enabled=item.Id!=user.Id;resetPassword.Enabled=item.Id!=user.Id;
+                editProfile.Enabled=true;
             }
             async Task LoadRows(int? selectId=null)
             {
                 grid.DataSource=await auth.UsersAsync(user);
-                HideColumns(grid,"Id","Version");
+                HideColumns(grid,"Id","Version","AvatarPng");
                 if(grid.Columns["Username"] is { } name)name.HeaderText="Tên đăng nhập";
+                if(grid.Columns["DisplayName"] is { } display)display.HeaderText="Tên hiển thị";
                 if(grid.Columns["Role"] is { } role)role.HeaderText="Vai trò";
                 if(grid.Columns["Active"] is { } status)status.HeaderText="Đang hoạt động";
                 if(grid.Columns["LockedUntil"] is { } locked){locked.HeaderText="Khóa đến";locked.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
@@ -381,6 +428,23 @@ public partial class ucDashboard
                 ShowSelection();
             }
             grid.SelectionChanged+=(_,_)=>ShowSelection();
+            editProfile.Click+=async (_,_)=>
+            {
+                try
+                {
+                    var selected=Selected();
+                    if(await EditStaffProfile(selected,dialog))
+                    {
+                        await LoadRows(selected.Id);
+                        if(selected.Id==user.Id)
+                        {
+                            myProfile=await auth.ProfileAsync(user,user.Id);
+                            UpdateProfileInfo();UpdateHeaderAccountProfile();UpdateNavigationTitle();
+                        }
+                    }
+                }
+                catch(Exception ex){Ui.Error(dialog,ex);}
+            };
             save.Click+=async (_,_)=>
             {
                 save.Enabled=false;

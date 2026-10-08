@@ -6,38 +6,80 @@ namespace QLKhachSan.GUI;
 public partial class ucDashboard
 {
     private readonly Label lblHeaderSubtitle=new();
+    private AvatarBadge? headerAvatar;
+    private Label? headerAccountName;
+    private Label? headerAccountRole;
+    private ToolStripMenuItem? headerProfileItem;
     private readonly Label lblDonSummary=new();
     private readonly Label lblDoiSummary=new();
     private readonly Label lblVipSummary=new();
     private void ApplyAppearance()
     {
         SuspendLayout();Font=AppTheme.Body;BackColor=AppTheme.Canvas;
-        pnlHeader.Height=88;pnlHeader.BackColor=Color.White;
+        pnlHeader.Height=88;pnlHeader.BackColor=AppTheme.Navy;
         pnlHeader.Controls.Add(new DashboardLogo {Location=new Point(22,22)});
         pnlHeader.Paint+=(_,e)=>{using var edge=new Pen(AppTheme.Border);e.Graphics.DrawLine(edge,0,pnlHeader.Height-1,pnlHeader.Width,pnlHeader.Height-1);};
-        lblHeaderTitle.Font=AppTheme.Title;lblHeaderTitle.ForeColor=AppTheme.Ink;
+        lblHeaderTitle.Font=AppTheme.TextFont(19F,FontStyle.Bold);lblHeaderTitle.ForeColor=Color.White;
         lblHeaderTitle.UseMnemonic=false;
-        lblHeaderTitle.AutoSize=false;lblHeaderTitle.AutoEllipsis=true;lblHeaderTitle.Location=new Point(78,12);lblHeaderTitle.Height=40;
+        lblHeaderTitle.AutoSize=false;lblHeaderTitle.AutoEllipsis=true;lblHeaderTitle.Location=new Point(80,10);lblHeaderTitle.Height=46;
         lblHeaderTitle.TextAlign=ContentAlignment.MiddleLeft;
         lblHeaderSubtitle.Text=$"{user.Username}  •  {RolePolicy.Name(user.Role)}";
-        lblHeaderSubtitle.Font=AppTheme.Small;lblHeaderSubtitle.ForeColor=AppTheme.Muted;
-        lblHeaderSubtitle.AutoSize=false;lblHeaderSubtitle.Location=new Point(80,55);lblHeaderSubtitle.Height=22;
+        lblHeaderSubtitle.Font=AppTheme.Small;lblHeaderSubtitle.ForeColor=Color.FromArgb(218,228,233);
+        lblHeaderSubtitle.AutoSize=false;lblHeaderSubtitle.Location=new Point(82,59);lblHeaderSubtitle.Height=20;
         pnlHeader.Controls.Add(lblHeaderSubtitle);
         void SizeHeaderText(){var width=Math.Max(230,pnlHeader.ClientSize.Width-flpHeaderRight.Width-104);lblHeaderTitle.Width=width;lblHeaderSubtitle.Width=width;}
         pnlHeader.Resize+=(_,_)=>SizeHeaderText();SizeHeaderText();
-        lblClock.ForeColor=AppTheme.Muted;lblClock.Font=AppTheme.Bold;lblClock.Margin=new Padding(0,9,18,0);
-        flpHeaderRight.Padding=new Padding(0,24,20,0);
+        flpHeaderRight.AutoSize=false;flpHeaderRight.Width=720;
+        flpHeaderRight.Padding=new Padding(0,20,20,0);
+        lblClock.AutoSize=false;lblClock.Size=new Size(150,44);
+        lblClock.TextAlign=ContentAlignment.MiddleCenter;
+        lblClock.ForeColor=Color.FromArgb(190,207,224);lblClock.Font=AppTheme.Small;
+        lblClock.Margin=new Padding(0,0,12,0);
         btnRefresh.Text="Làm mới";btnDangXuat.Text="Đăng xuất";AppTheme.Button(btnRefresh,true);AppTheme.Button(btnDangXuat);
-        btnRefresh.Size=new Size(125,38);btnDangXuat.Size=new Size(138,38);
-        DecorateButton(btnRefresh,"refresh",Color.White,12);
-        DecorateButton(btnDangXuat,"logout",Color.FromArgb(166,75,80),12);
-        btnDangXuat.ForeColor=Color.FromArgb(166,75,80);
+        btnRefresh.BackColor=Color.FromArgb(31,53,86);btnRefresh.ForeColor=Color.White;
+        btnDangXuat.BackColor=AppTheme.Navy;btnDangXuat.ForeColor=Color.White;
+        btnDangXuat.FlatAppearance.BorderColor=Color.FromArgb(112,139,153);
+        btnRefresh.Size=new Size(112,44);btnDangXuat.Size=new Size(124,44);
+        btnRefresh.Margin=new Padding(0,0,10,0);btnDangXuat.Margin=Padding.Empty;
+        btnRefresh.Image=null;btnDangXuat.Image=null;
+        btnRefresh.TextAlign=ContentAlignment.MiddleCenter;
+        btnDangXuat.TextAlign=ContentAlignment.MiddleCenter;
+        btnRefresh.Padding=Padding.Empty;btnDangXuat.Padding=Padding.Empty;
+        var account=new Panel {Size=new Size(245,44),BackColor=Color.FromArgb(31,53,86),
+            Margin=new Padding(0,0,10,0),Cursor=Cursors.Hand};
+        account.Paint+=(_,e)=>
+        {
+            using var line=new Pen(Color.FromArgb(69,97,133));
+            e.Graphics.DrawRectangle(line,0,0,account.Width-1,account.Height-1);
+        };
+        headerAvatar=new AvatarBadge {Location=new Point(8,6),Size=new Size(32,32),Cursor=Cursors.Hand};
+        headerAccountName=new Label {Location=new Point(46,4),Size=new Size(190,20),
+            Font=AppTheme.Bold,ForeColor=Color.White,AutoEllipsis=true,Cursor=Cursors.Hand};
+        headerAccountRole=new Label {Location=new Point(46,23),
+            Size=new Size(190,18),Font=AppTheme.Small,ForeColor=Color.FromArgb(190,207,224),
+            AutoEllipsis=true,Cursor=Cursors.Hand};
+        account.Controls.Add(headerAvatar);account.Controls.Add(headerAccountName);account.Controls.Add(headerAccountRole);
+        var accountMenu=new ContextMenuStrip {Font=AppTheme.Body,BackColor=Color.White,ForeColor=AppTheme.Ink};
+        headerProfileItem=new ToolStripMenuItem {Enabled=false};
+        accountMenu.Items.Add(headerProfileItem);
+        accountMenu.Items.Add(new ToolStripSeparator());
+        accountMenu.Items.Add(new ToolStripMenuItem("Chỉnh sửa hồ sơ",null,async (_,_)=>await Run(ShowAccounts)));
+        accountMenu.Items.Add(new ToolStripMenuItem("Đăng xuất",null,(_,_)=>btnDangXuat.PerformClick()));
+        account.ContextMenuStrip=accountMenu;
+        account.Disposed+=(_,_)=>accountMenu.Dispose();
+        void OpenAccount(object? _,EventArgs __)=>accountMenu.Show(account,new Point(0,account.Height));
+        account.Click+=OpenAccount;headerAvatar.Click+=OpenAccount;
+        headerAccountName.Click+=OpenAccount;headerAccountRole.Click+=OpenAccount;
+        flpHeaderRight.Controls.Add(account);
+        flpHeaderRight.Controls.SetChildIndex(account,2);
+        UpdateHeaderAccountProfile();
+        SizeHeaderText();
         tlpCards.Height=132;tlpCards.Padding=new Padding(16,14,16,10);
         var panels=new[]{pnlCard1,pnlCard2,pnlCard3,pnlCard4,pnlCard5};
         var titles=new[]{lblCard1Title,lblCard2Title,lblCard3Title,lblCard4Title,lblCard5Title};
         var values=new[]{lblCard1Value,lblCard2Value,lblCard3Value,lblCard4Value,lblCard5Value};
         var subs=new[]{lblCard1Sub,lblCard2Sub,lblCard3Sub,lblCard4Sub,lblCard5Sub};
-        var colors=new[]{AppTheme.Blue,AppTheme.Teal,Color.FromArgb(145,94,121),AppTheme.Amber,AppTheme.Blue};
+        var colors=new[]{AppTheme.Blue,AppTheme.Teal,Color.FromArgb(89,104,145),AppTheme.Amber,AppTheme.Blue};
         for(var i=0;i<panels.Length;i++)
         {
             var index=i;
@@ -78,7 +120,7 @@ public partial class ucDashboard
         pnlLeftTools.BackColor=AppTheme.Navy;pnlLeftTools.Padding=new Padding(12);pnlLeftTools.AutoScroll=true;
         pnlLeftTools.Controls.Add(new DashboardLogo {Location=new Point(14,14),Size=new Size(38,38)});
         pnlLeftTools.Controls.Add(new Label {Text="HOTEL DESK",Font=new Font("Segoe UI Semibold",12F,FontStyle.Bold),ForeColor=Color.White,BackColor=AppTheme.Navy,AutoSize=true,Location=new Point(63,20)});
-        lblToolsTitle.Text="THAO TÁC NHANH";lblToolsTitle.ForeColor=Color.FromArgb(244,191,151);lblToolsTitle.Font=AppTheme.Small;lblToolsTitle.Location=new Point(15,64);
+        lblToolsTitle.Text="THAO TÁC NHANH";lblToolsTitle.ForeColor=AppTheme.Focus;lblToolsTitle.Font=AppTheme.Small;lblToolsTitle.Location=new Point(15,64);
         txtTimPhong.Location=new Point(14,94);txtTimPhong.Width=154;txtTimPhong.PlaceholderText="Tìm số phòng";txtTimPhong.Font=AppTheme.Body;
         btnTimPhong.Location=new Point(176,92);btnTimPhong.Size=new Size(48,31);AppTheme.Button(btnTimPhong);btnTimPhong.Text="Tìm";
         btnCheckIn.Text="Nhận phòng";btnGoiDichVu.Text="Gọi dịch vụ";btnBaoDonXong.Text="Xong dọn phòng";
@@ -96,7 +138,7 @@ public partial class ucDashboard
         tabMainView.DrawItem+=(_,e)=>
         {
             var active=e.Index==tabMainView.SelectedIndex;
-            using var brush=new SolidBrush(active?Color.White:Color.FromArgb(240,237,231));e.Graphics.FillRectangle(brush,e.Bounds);
+            using var brush=new SolidBrush(active?Color.White:Color.FromArgb(238,243,250));e.Graphics.FillRectangle(brush,e.Bounds);
             var page=tabMainView.TabPages[e.Index];
             if(tabIcons.TryGetValue(page,out var icon))e.Graphics.DrawImage(icon,e.Bounds.Left+13,e.Bounds.Top+11,17,17);
             var textBounds=new Rectangle(e.Bounds.Left+32,e.Bounds.Top,e.Bounds.Width-35,e.Bounds.Height);
@@ -114,7 +156,7 @@ public partial class ucDashboard
         for(var i=0;i<3;i++)tlpRoomColumns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/3));
         AddRoomSection("PHÒNG ĐƠN",flpDon,lblDonSummary,0,AppTheme.Teal);
         AddRoomSection("PHÒNG ĐÔI",flpDoi,lblDoiSummary,1,AppTheme.Blue);
-        AddRoomSection("PHÒNG VIP",flpVIP,lblVipSummary,2,Color.FromArgb(145,94,121));
+        AddRoomSection("PHÒNG VIP",flpVIP,lblVipSummary,2,AppTheme.Amber);
         tlpRoomColumns.ResumeLayout(true);
         scMatrix.BackColor=AppTheme.Canvas;
         scMatrix.RowStyles[1].Height=190;
@@ -146,6 +188,14 @@ public partial class ucDashboard
         tabThongKe.Padding=new Padding(0);pnlChartContainer.BackColor=AppTheme.Canvas;
         ResumeLayout(true);
     }
+    private void UpdateHeaderAccountProfile()
+    {
+        if(headerAccountName is null)return;
+        headerAccountName.Text=$"{user.DisplayName}  ·  {user.Role}";
+        headerAccountRole!.Text=$"@{user.Username}  ▾";
+        headerAvatar!.SetProfile(user.DisplayName,user.AvatarPng);
+        if(headerProfileItem is not null)headerProfileItem.Text=$"{user.DisplayName}  •  {user.Role}";
+    }
     private void AddRoomSection(string title,FlowLayoutPanel flow,Label summary,int column,Color accent)
     {
         var card=new TableLayoutPanel {Dock=DockStyle.Fill,BackColor=Color.White,ColumnCount=1,RowCount=2,Margin=new Padding(5),Padding=new Padding(0)};
@@ -162,7 +212,7 @@ public partial class ucDashboard
     }
     private static void ResizeRoomTiles(FlowLayoutPanel flow)
     {
-        foreach(var tile in flow.Controls.OfType<RoomTile>())if(tile.Size!=new Size(88,74))tile.Size=new Size(88,74);
+        foreach(var tile in flow.Controls.OfType<RoomTile>())if(tile.Size!=new Size(112,78))tile.Size=new Size(112,78);
     }
     private void ReflowSidebar()
     {

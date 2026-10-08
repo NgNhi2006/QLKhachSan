@@ -5,6 +5,37 @@ namespace QLKhachSan.BLL;
 
 public sealed partial class AuthService
 {
+    public Task<UserInfo> ProfileAsync(UserSession actor,int id) => repository.RunAsync(false,async db=>
+    {
+        await db.RequireUserAsync(actor,id!=actor.Id);
+        if(id!=actor.Id)FunctionPolicy.Require(actor,"staff.manage");
+        return (await db.UsersAsync()).SingleOrDefault(x=>x.Id==id)
+            ?? throw new BusinessException("Tài khoản không tồn tại.");
+    });
+
+    public async Task SaveProfileAsync(UserSession actor,UserInfo selected,string displayName,byte[]? avatarPng)
+    {
+        displayName=displayName.Trim();
+        if(displayName.Length is <2 or >100 || displayName.Any(char.IsControl))
+            throw new BusinessException("Tên hiển thị cần từ 2 đến 100 ký tự hợp lệ.");
+        if(avatarPng is {Length:>262144} || avatarPng is {Length:>0} &&
+            !avatarPng.AsSpan().StartsWith(new byte[]{137,80,78,71,13,10,26,10}))
+            throw new BusinessException("Ảnh đại diện cần là PNG và không quá 256 KB.");
+        await repository.RunAsync(true,async db=>
+        {
+            await db.RequireUserAsync(actor,selected.Id!=actor.Id);
+            if(selected.Id!=actor.Id)FunctionPolicy.Require(actor,"staff.manage");
+            var current=(await db.UsersAsync()).SingleOrDefault(x=>x.Id==selected.Id)
+                ?? throw new BusinessException("Tài khoản không tồn tại.");
+            if(current.Version!=selected.Version)throw new BusinessException("Tài khoản đã thay đổi. Hãy mở lại.");
+            if(await db.UpdateProfileAsync(selected.Id,displayName,avatarPng)!=1)
+                throw new BusinessException("Không lưu được hồ sơ nhân viên.");
+            await db.AuditAsync(actor,"UpdateProfile",$"{selected.Username}; tên hiển thị {displayName}");
+            return 0;
+        });
+        if(selected.Id==actor.Id){actor.DisplayName=displayName;actor.AvatarPng=avatarPng;}
+    }
+
     public Task<HashSet<string>> UserFunctionsAsync(UserSession actor,UserInfo selected) => repository.RunAsync(false,async db=>
     {
         await db.RequireUserAsync(actor,true);

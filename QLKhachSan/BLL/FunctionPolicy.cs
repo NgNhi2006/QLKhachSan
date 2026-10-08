@@ -54,7 +54,7 @@ public static class FunctionPolicy
         ["CustomersAsync"]=["customer.profile"], ["CustomerInvoicesAsync"]=["customer.profile"],
         ["CustomerOrdersAsync"]=["customer.profile"], ["InvoicesAsync"]=["invoice.list"],
         ["RevenueAsync"]=["report.revenue","invoice.list"], ["ReportAsync"]=["report.revenue","invoice.list"],
-        ["CreateStayAsync"]=["room.walkin","room.reserve"], ["CheckInAsync"]=["room.checkin"],
+        ["CreateStayAsync"]=["room.walkin","room.reserve"], ["CreateStaysAsync"]=["room.walkin","room.reserve"], ["CheckInAsync"]=["room.checkin"],
         ["CancelAsync"]=["room.booking_cancel"], ["TransferAsync"]=["room.transfer"],
         ["ExtendAsync"]=["room.extend"], ["AddServicesAsync"]=["service.order"],
         ["DeliverAsync"]=["service.manage"], ["SetRoomStatusAsync"]=["room.clean","room.maintain"],

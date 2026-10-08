@@ -8,9 +8,15 @@ public partial class ucDashboard
     private async Task ShowPricing()
     {
         using var form=new Form {Text="Bảng giá phòng",Size=new Size(900,740),MinimumSize=new Size(700,550),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas};
-        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=1,Padding=new Padding(16)};
+        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,Padding=new Padding(16)};
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,84));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         form.Controls.Add(layout);
+        var heading=new Panel {Dock=DockStyle.Fill,BackColor=AppTheme.Navy,Margin=new Padding(6,0,6,10),Padding=new Padding(20,9,12,5)};
+        heading.Controls.Add(new Label {Text="Bảng giá phòng",Dock=DockStyle.Top,Height=36,Font=AppTheme.Title,ForeColor=Color.White});
+        heading.Controls.Add(new Label {Text="Chọn phòng và cập nhật giá theo ngày",Dock=DockStyle.Bottom,Height=22,Font=AppTheme.Body,ForeColor=Color.FromArgb(220,231,236)});
+        layout.Controls.Add(heading,0,0);
         var rooms=Ui.Grid();
         var roomPrice=Ui.Money();
         TableLayoutPanel Side(string title,DataGridView grid,NumericUpDown price,string buttonText,EventHandler save)
@@ -38,7 +44,7 @@ public partial class ucDashboard
             if(rooms.CurrentRow?.DataBoundItem is not Room room){Ui.Error(form,new BusinessException("Chọn phòng cần đổi giá."));return;}
             try{await service.SaveRoomAsync(room with {Rate=roomPrice.Value});await LoadRooms();}
             catch(Exception ex){Ui.Error(form,ex);}
-        }),0,0);
+        }),0,1);
         await LoadRooms();form.ShowDialog(this);
     }
 

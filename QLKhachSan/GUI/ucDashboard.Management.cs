@@ -210,7 +210,9 @@ public partial class ucDashboard
     }
     private static void FormatGrid(DataGridView grid,Dictionary<string,string> names)
     {
-        grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.AllCells;
+        grid.AutoSizeColumnsMode=names.Count<=6
+            ? DataGridViewAutoSizeColumnsMode.Fill
+            : DataGridViewAutoSizeColumnsMode.AllCells;
         foreach(DataGridViewColumn column in grid.Columns)
         {
             if(names.TryGetValue(column.Name,out var name))column.HeaderText=name;

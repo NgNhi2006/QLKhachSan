@@ -13,7 +13,8 @@ public partial class ucDashboard
         {
             grid.DataSource=await auth.EmployeesAsync(user);
             FormatGrid(grid,new() {{"Username","Tên đăng nhập"},{"Role","Vai trò"},{"Active","Đang hoạt động"},{"LockedUntil","Khóa đến"}});
-            HideColumns(grid,"Id","Version");
+            HideColumns(grid,"Id","Version","AvatarPng");
+            if(grid.Columns["DisplayName"] is { } display)display.HeaderText="Tên hiển thị";
         }
         dialog.Action("LÀM MỚI",LoadRows,false);
         await LoadRows();dialog.ShowDialog(this);

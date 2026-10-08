@@ -6,6 +6,8 @@ Trong **Menu tổng → Tùy chỉnh menu**, Admin quản lý ba cấp: menu ch�
 
 Chức năng liên kết với một `MaChucNang` đã được ứng dụng hỗ trợ. Admin có thể tạo nhiều đường dẫn đến cùng một nghiệp vụ, đổi tên hoặc ẩn nút. Quyền người dùng luôn được kiểm tra bằng **mã nghiệp vụ gốc** và vai trò, nên việc tạo menu không thể tự cấp quyền. Nghiệp vụ mới chưa có mã xử lý vẫn cần bản cập nhật ứng dụng.
 
+Từ V15, nút **Thiết kế chức năng** tạo một màn hình dữ liệu mới, độc lập với `MaChucNang` có sẵn. Admin đặt tên, chọn menu con, vai trò, thêm tối đa 30 ô với loại dữ liệu và chiều rộng từng ô, xem trước và đổi nhãn ba thao tác Tạo mới/Lưu/Xóa. Màn hình chạy có danh sách tìm kiếm và dữ liệu riêng trong `DuLieuChucNangMoi`; các thao tác được kiểm tra theo vai trò và ghi nhật ký. Trình dựng này không tạo mã xử lý cho các nghiệp vụ khách sạn hiện có như đặt phòng hay thanh toán.
+
 V11 tạo `CauHinhMenu`, `CauHinhMenuCon`, `CauHinhChucNang` và sao chép cấu trúc menu V10 sang đó. Các bảng `MenuTong`, `MenuCon`, `ChucNang` và bảng quyền cũ được giữ nguyên để không mất quyền và lịch sử. Không xóa được menu có menu con, menu con có chức năng, hoặc mục mặc định; mục mặc định có thể đổi tên, sắp xếp, ẩn. Mọi thay đổi được ghi trong `NhatKyThaoTac`.
 
 ## Phòng, cọc và hóa đơn

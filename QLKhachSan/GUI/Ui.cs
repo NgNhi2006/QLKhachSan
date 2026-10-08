@@ -51,11 +51,11 @@ internal static class Ui
     {
         while(parent.Controls.Count>0) parent.Controls[0].Dispose();
     }
-    public static ComboBox Combo<T>(IEnumerable<T> values) => new() { DropDownStyle=ComboBoxStyle.DropDownList,BindingContext=new BindingContext(),DataSource=values.ToList(),Dock=DockStyle.Top };
-    public static DateTimePicker DatePicker(DateTime value) => new() { Format=DateTimePickerFormat.Custom,CustomFormat="dd/MM/yyyy HH:mm",Value=value,Dock=DockStyle.Top };
-    public static NumericUpDown Number(int max,int value=1) => new() { Minimum=1,Maximum=max,Value=value,Dock=DockStyle.Top };
-    public static NumericUpDown Money(decimal value=0) => new() {Minimum=0,Maximum=1_000_000_000,Value=Math.Clamp(value,0,1_000_000_000),ThousandsSeparator=true,Increment=10000,Dock=DockStyle.Top};
-    public static TextBox Text(int max=100,bool password=false) => new() { MaxLength=max,UseSystemPasswordChar=password,Dock=DockStyle.Top };
+    public static ComboBox Combo<T>(IEnumerable<T> values) => new() { DropDownStyle=ComboBoxStyle.DropDownList,BindingContext=new BindingContext(),DataSource=values.ToList(),Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink,BackColor=Color.White };
+    public static DateTimePicker DatePicker(DateTime value) => new() { Format=DateTimePickerFormat.Custom,CustomFormat="dd/MM/yyyy HH:mm",Value=value,Dock=DockStyle.Top,Font=AppTheme.Body };
+    public static NumericUpDown Number(int max,int value=1) => new() { Minimum=1,Maximum=max,Value=value,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink };
+    public static NumericUpDown Money(decimal value=0) => new() {Minimum=0,Maximum=1_000_000_000,Value=Math.Clamp(value,0,1_000_000_000),ThousandsSeparator=true,Increment=10000,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink};
+    public static TextBox Text(int max=100,bool password=false) => new() { MaxLength=max,UseSystemPasswordChar=password,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink,BackColor=Color.White,BorderStyle=BorderStyle.FixedSingle };
 }
 
 // Dialog layout is shared; transaction and validation remain in the BLL.
@@ -66,14 +66,21 @@ internal sealed class InputDialog : Form
     private bool saving;
     private readonly bool labelsBeside;
     private int fieldRow;
-    private readonly Font dialogFont=new("Segoe UI",10);
+    private readonly Font dialogFont=AppTheme.TextFont(10);
     public InputDialog(string title,int width=540,int height=620,bool labelsBeside=false)
     {
         this.labelsBeside=labelsBeside;
         Text=title; Size=new Size(width,height); MinimumSize=new Size(420,320);
         StartPosition=FormStartPosition.CenterParent; AutoScaleMode=AutoScaleMode.Dpi;
-        Font=dialogFont; BackColor=Color.White;ForeColor=AppTheme.Ink;
-        fields.Padding=new Padding(24,16,24,16);actions.Padding=new Padding(20,12,20,16);actions.BackColor=AppTheme.Canvas;
+        Font=dialogFont; BackColor=AppTheme.Canvas;ForeColor=AppTheme.Ink;
+        Load+=(_,_)=>
+        {
+            var working=Screen.FromControl(this).WorkingArea;
+            MaximumSize=new Size(Math.Max(420,working.Width-24),Math.Max(320,working.Height-24));
+            Size=new Size(Math.Min(Width,MaximumSize.Width),Math.Min(Height,MaximumSize.Height));
+        };
+        fields.Padding=new Padding(26,20,26,20);fields.BackColor=Color.White;
+        actions.Padding=new Padding(24,12,24,16);actions.BackColor=AppTheme.Canvas;
         if(labelsBeside)
         {
             fields.ColumnCount=2;
@@ -84,15 +91,15 @@ internal sealed class InputDialog : Form
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         Controls.Add(fields);
         Controls.Add(actions);
-        var heading=new Panel {Dock=DockStyle.Top,Height=74,BackColor=Color.White};
+        var heading=new Panel {Dock=DockStyle.Top,Height=86,BackColor=AppTheme.Navy};
         heading.Paint+=(_,e)=>
         {
-            using var accent=new SolidBrush(AppTheme.Teal);
-            using var edge=new Pen(AppTheme.Border);
+            using var accent=new SolidBrush(AppTheme.Focus);
+            using var edge=new Pen(AppTheme.Navy);
             e.Graphics.FillRectangle(accent,0,0,4,heading.Height);
             e.Graphics.DrawLine(edge,0,heading.Height-1,heading.Width,heading.Height-1);
         };
-        heading.Controls.Add(new Label {Text=title,Font=AppTheme.Title,ForeColor=AppTheme.Ink,AutoEllipsis=true,Dock=DockStyle.Fill,Padding=new Padding(22,18,12,0)});
+        heading.Controls.Add(new Label {Text=title,Font=AppTheme.Title,ForeColor=Color.White,AutoEllipsis=true,Dock=DockStyle.Fill,Padding=new Padding(25,23,12,0)});
         Controls.Add(heading);
         FormClosing+=(_,e)=> { if(saving)e.Cancel=true; };
     }
@@ -153,8 +160,7 @@ internal sealed class InputDialog : Form
     }
     public Button Action(string text,Func<Task> save,bool close=true)
     {
-        var button=new Button { Text=text,Height=44,Dock=DockStyle.Top,BackColor=AppTheme.Blue,ForeColor=Color.White,FlatStyle=FlatStyle.Flat };
-        AppTheme.Button(button,true);
+        var button=new RoundedActionButton { Text=text,Height=44,Dock=DockStyle.Top,BackColor=AppTheme.Blue,ForeColor=Color.White };
         button.Click+=async (_,_)=>
         {
             if(saving)return; saving=true; fields.Enabled=false; actions.Enabled=false; UseWaitCursor=true;

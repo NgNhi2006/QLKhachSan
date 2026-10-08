@@ -29,7 +29,8 @@ public sealed class HotelRepository
         }
     }
 }
-public sealed record Account(int Id, string Username, byte[] Hash, byte[] Salt, int Iterations, string Role, bool Active, int Failed, DateTime? LockedUntil, long SecurityVersion);
+public sealed record Account(int Id, string Username, byte[] Hash, byte[] Salt, int Iterations, string Role, bool Active,
+    int Failed, DateTime? LockedUntil, long SecurityVersion, string DisplayName, byte[]? AvatarPng);
 
 public sealed partial class HotelTransaction(SqlConnection connection, SqlTransaction transaction, CancellationToken token)
 {
@@ -41,7 +42,8 @@ public sealed partial class HotelTransaction(SqlConnection connection, SqlTransa
             bool => new SqlParameter(name, SqlDbType.Bit),
             decimal => new SqlParameter(name, SqlDbType.Decimal) { Precision = 18, Scale = 3 },
             DateTime => new SqlParameter(name, SqlDbType.DateTime2),
-            byte[] bytes => new SqlParameter(name, SqlDbType.VarBinary, bytes.Length),
+            byte[] bytes => new SqlParameter(name, SqlDbType.VarBinary, bytes.Length>8000?-1:bytes.Length),
+            string s when s.Length>500 => new SqlParameter(name, SqlDbType.NVarChar, -1),
             _ => new SqlParameter(name, SqlDbType.NVarChar, 500)
         };
         p.Value = value ?? DBNull.Value;
@@ -81,8 +83,8 @@ public sealed partial class HotelTransaction(SqlConnection connection, SqlTransa
     }
     public Task<long> UserCountAsync() => Scalar("SELECT COUNT_BIG(*) FROM dbo.TaiKhoanNhanVien WHERE DaLuuTru=0");
     public async Task<Account?> AccountAsync(string username) => (await Query(
-        "SELECT Ma,TenDangNhap,MatKhauBam,MuoiBam,SoLanBam,VaiTro,DangHoatDong,SoLanDangNhapSai,KhoaDen,PhienBanBaoMat FROM dbo.TaiKhoanNhanVien WHERE TenDangNhap=@p0 AND DaLuuTru=0",
-        r => new Account(r.GetInt32(0),r.GetString(1),(byte[])r[2],(byte[])r[3],r.GetInt32(4),r.GetString(5),r.GetBoolean(6),r.GetInt32(7),Date(r,8),r.GetInt64(9)),username)).SingleOrDefault();
+        "SELECT Ma,TenDangNhap,MatKhauBam,MuoiBam,SoLanBam,VaiTro,DangHoatDong,SoLanDangNhapSai,KhoaDen,PhienBanBaoMat,COALESCE(NULLIF(TenHienThi,N''),TenDangNhap),AnhDaiDien FROM dbo.TaiKhoanNhanVien WHERE TenDangNhap=@p0 AND DaLuuTru=0",
+        r => new Account(r.GetInt32(0),r.GetString(1),(byte[])r[2],(byte[])r[3],r.GetInt32(4),r.GetString(5),r.GetBoolean(6),r.GetInt32(7),Date(r,8),r.GetInt64(9),r.GetString(10),r.IsDBNull(11)?null:(byte[])r[11]),username)).SingleOrDefault();
     public async Task<int> CreateUserAsync(string name, byte[] hash, byte[] salt, int iterations, string role)
         => checked((int)await Scalar("INSERT dbo.TaiKhoanNhanVien(TenDangNhap,MatKhauBam,MuoiBam,SoLanBam,VaiTro) OUTPUT INSERTED.Ma VALUES(@p0,@p1,@p2,@p3,@p4)",name,hash,salt,iterations,role));
     public Task<int> LoginResultAsync(int id, bool success) => Execute(success

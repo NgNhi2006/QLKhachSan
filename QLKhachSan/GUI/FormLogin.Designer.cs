@@ -43,6 +43,7 @@ partial class FormLogin
         pnlForm = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Canvas };
         Controls.Add(pnlForm);
         Controls.Add(pnlBanner);
+        pnlForm.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 6, BackColor = AppTheme.Amber, TabStop = false });
 
         lblClose = new LoginCloseButton
         {
@@ -53,7 +54,7 @@ partial class FormLogin
         pnlForm.Controls.Add(lblClose);
         pnlForm.Controls.Add(new Label
         {
-            Text = "KHÔNG GIAN LÀM VIỆC", Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Text = "HOTEL DESK  /  ĐIỀU HÀNH KHÁCH SẠN", Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             ForeColor = AppTheme.Amber, AutoSize = true, Location = new Point(68, 100)
         });
         lblTitleLogin = new Label

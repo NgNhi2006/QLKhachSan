@@ -19,7 +19,7 @@ public partial class ucDashboard
             g.DrawString($"PHIẾU THU TIỀN CỌC  #{receipt.PaymentId}",bold,Brushes.Black,x,y);y+=34;
             g.DrawString($"Ngày thu: {receipt.PaidAt:dd/MM/yyyy HH:mm}",body,Brushes.Black,x,y);y+=27;
             g.DrawString($"Khách hàng: {receipt.Guest}  •  Điện thoại: {receipt.Phone}",body,Brushes.Black,x,y);y+=27;
-            g.DrawString($"Phòng: {receipt.Room}  •  Lượt đặt: #{receipt.StayId}",body,Brushes.Black,x,y);y+=36;
+            g.DrawString($"Phòng: {receipt.Room}",body,Brushes.Black,x,y);y+=36;
             g.DrawLine(Pens.Gray,x,y,x+width,y);y+=17;
             g.DrawString($"Cọc thu lần này: {receipt.Amount:N0} đ",bold,Brushes.Black,x,y);y+=30;
             g.DrawString($"Tổng cọc đã thu: {receipt.TotalDeposited:N0} đ",body,Brushes.Black,x,y);y+=27;

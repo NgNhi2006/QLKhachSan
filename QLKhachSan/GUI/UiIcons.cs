@@ -4,6 +4,13 @@ namespace QLKhachSan.GUI;
 
 internal static class UiIcons
 {
+    public static Image Create(string kind,Color color,int size,byte[]? png)
+    {
+        if(png is null)return Create(kind,color,size);
+        using var stream=new MemoryStream(png);
+        using var source=Image.FromStream(stream);
+        return new Bitmap(source,new Size(size,size));
+    }
     public static Image Create(string kind,Color color,int size=20)
     {
         var image=new Bitmap(size,size);
@@ -22,6 +29,9 @@ internal static class UiIcons
                 using(var dot=new SolidBrush(color)){g.FillEllipse(dot,6,11,2,2);g.FillEllipse(dot,11,11,2,2);}break;
             case "people":
                 g.DrawEllipse(pen,7,2,6,6);g.DrawArc(pen,3,9,14,9,185,170);break;
+            case "people2":
+                g.DrawEllipse(pen,3,3,5,5);g.DrawEllipse(pen,12,3,5,5);
+                g.DrawArc(pen,1,9,9,9,185,170);g.DrawArc(pen,10,9,9,9,185,170);break;
             case "money":
                 Box(2,4,16,12);g.DrawEllipse(pen,7,6,6,8);Line(4,7,5,7);Line(15,13,16,13);break;
             case "chart":
@@ -30,6 +40,12 @@ internal static class UiIcons
                 Line(5,2,15,2);Line(5,2,5,18);Line(15,2,15,18);Line(5,18,7,16);Line(7,16,10,18);Line(10,18,13,16);Line(13,16,15,18);Line(8,7,12,7);Line(8,11,12,11);break;
             case "clock":
                 g.DrawEllipse(pen,3,3,14,14);Line(10,6,10,10);Line(10,10,13,12);break;
+            case "calendar-clock":
+                Box(2,4,15,13);Line(2,8,17,8);Line(6,2,6,6);Line(13,2,13,6);
+                g.DrawEllipse(pen,9,10,7,7);Line(12.5f,11.5f,12.5f,13.5f);Line(12.5f,13.5f,14,14.5f);break;
+            case "finance":
+                Box(2,3,10,14);Line(4,7,10,7);Line(4,10,10,10);Line(4,13,8,13);
+                g.DrawEllipse(pen,10,10,8,8);Line(14,11.5f,14,16.5f);break;
             case "key":
                 g.DrawEllipse(pen,2,3,9,9);Line(10,10,17,17);Line(14,14,16,12);break;
             case "service":
@@ -40,6 +56,22 @@ internal static class UiIcons
                 Line(3,6,17,6);Line(14,3,17,6);Line(17,6,14,9);Line(17,14,3,14);Line(6,11,3,14);Line(3,14,6,17);break;
             case "search":
                 g.DrawEllipse(pen,3,3,10,10);Line(12,12,18,18);break;
+            case "building": Box(3,2,14,16);for(var x=6;x<=14;x+=4)for(var y=5;y<=11;y+=4)Box(x,y,1,1);Box(8,14,4,4);break;
+            case "door": Box(5,2,10,16);g.DrawEllipse(pen,12,10,1,1);break;
+            case "bath": Line(2,11,18,11);g.DrawArc(pen,3,8,14,9,0,180);Line(5,17,4,19);Line(15,17,16,19);Line(4,11,4,5);Line(4,5,8,5);break;
+            case "food": g.DrawEllipse(pen,3,8,14,7);Line(2,17,18,17);Line(10,5,10,8);break;
+            case "coffee": Box(3,7,11,9);g.DrawArc(pen,12,8,6,6,260,190);Line(4,18,16,18);break;
+            case "wifi": g.DrawArc(pen,2,5,16,12,205,130);g.DrawArc(pen,5,9,10,8,205,130);g.FillEllipse(new SolidBrush(color),9,16,2,2);break;
+            case "car": Box(3,8,14,7);Line(5,8,7,4);Line(7,4,13,4);Line(13,4,15,8);g.DrawEllipse(pen,5,14,3,3);g.DrawEllipse(pen,12,14,3,3);break;
+            case "phone": g.DrawArc(pen,3,3,14,14,120,120);Line(5,14,8,17);Line(12,17,15,14);break;
+            case "bell": g.DrawArc(pen,4,4,12,12,180,180);Line(4,10,3,15);Line(3,15,17,15);Line(17,15,16,10);Line(8,18,12,18);break;
+            case "bag": Box(3,7,14,11);g.DrawArc(pen,7,2,6,9,180,180);break;
+            case "star":
+                using(var brush=new SolidBrush(color)){var points=Enumerable.Range(0,10).Select(i=>new PointF(10+(i%2==0?8:4)*(float)Math.Sin(i*Math.PI/5),10-(i%2==0?8:4)*(float)Math.Cos(i*Math.PI/5))).ToArray();g.FillPolygon(brush,points);}break;
+            case "heart": g.DrawArc(pen,2,4,8,9,180,180);g.DrawArc(pen,10,4,8,9,180,180);Line(2,9,10,18);Line(18,9,10,18);break;
+            case "shield": Line(10,2,17,5);Line(17,5,16,13);Line(16,13,10,18);Line(10,18,4,13);Line(4,13,3,5);Line(3,5,10,2);break;
+            case "gear": g.DrawEllipse(pen,4,4,12,12);g.DrawEllipse(pen,8,8,4,4);for(var i=0;i<8;i++){var a=i*Math.PI/4;Line(10+7*(float)Math.Cos(a),10+7*(float)Math.Sin(a),10+9*(float)Math.Cos(a),10+9*(float)Math.Sin(a));}break;
+            case "folder": Line(2,6,8,6);Line(8,6,10,8);Line(10,8,18,8);Line(18,8,18,17);Line(18,17,2,17);Line(2,17,2,6);break;
             case "logout":
                 Line(10,3,3,3);Line(3,3,3,17);Line(3,17,10,17);Line(9,10,18,10);Line(14,6,18,10);Line(18,10,14,14);break;
             case "refresh":

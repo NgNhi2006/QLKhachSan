@@ -51,7 +51,9 @@ public sealed partial class AuthService(HotelRepository repository)
             var user=new UserSession(a.Id,a.Username,a.Role)
             {
                 SecurityVersion=a.SecurityVersion,
-                GrantedFunctions=await db.UserFunctionsAsync(a.Id)
+                GrantedFunctions=await db.UserFunctionsAsync(a.Id),
+                DisplayName=a.DisplayName,
+                AvatarPng=a.AvatarPng
             };
             await db.AuditAsync(user,"Login","Đăng nhập");
             return user;

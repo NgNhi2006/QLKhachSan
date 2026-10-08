@@ -33,8 +33,8 @@ public static class SchemaMigrator
         };
         await using var check = new SqlCommand(versionSql, connection);
         var version = Convert.ToInt32(await check.ExecuteScalarAsync());
-        if (version is <1 or >11) throw new InvalidOperationException("Schema không tương thích. Hãy chạy Database.sql hoặc dùng đúng phiên bản ứng dụng.");
-        if (version == 11) return;
+        if (version is <1 or >16) throw new InvalidOperationException("Schema không tương thích. Hãy chạy Database.sql hoặc dùng đúng phiên bản ứng dụng.");
+        if (version == 16) return;
 
         using var stream = typeof(SchemaMigrator).Assembly.GetManifestResourceStream("QLKhachSan.Database.sql")
             ?? throw new InvalidOperationException("Thiếu Database.sql trong ứng dụng.");
@@ -65,14 +65,14 @@ public static class SchemaMigrator
             catch (SqlException ex) { throw new SchemaMigrationException(10, ex); }
         }
         var sections = Regex.Matches(source,
-            @"(?ms)^-- BEGIN MIGRATION V(?<version>[2-9]|10|11)[ \t]*\r?\n(?<sql>.*?)^-- END MIGRATION V\k<version>[ \t]*\r?$");
+            @"(?ms)^-- BEGIN MIGRATION V(?<version>[2-9]|10|11|12|13|14|15|16)[ \t]*\r?\n(?<sql>.*?)^-- END MIGRATION V\k<version>[ \t]*\r?$");
         var migrations = sections.Cast<Match>().ToDictionary(
             match => int.Parse(match.Groups["version"].Value),
             match => match.Groups["sql"].Value.Trim());
-        if (sections.Count != 10 || Enumerable.Range(2,10).Any(next => !migrations.ContainsKey(next)))
-            throw new InvalidOperationException("Database.sql thiếu một bước nâng cấp từ V2 đến V11.");
+        if (sections.Count != 15 || Enumerable.Range(2,15).Any(next => !migrations.ContainsKey(next)))
+            throw new InvalidOperationException("Database.sql thiếu một bước nâng cấp từ V2 đến V16.");
 
-        foreach(var next in Enumerable.Range(version+1,11-version))
+        foreach(var next in Enumerable.Range(version+1,16-version))
         {
             await using var command = new SqlCommand(migrations[next], connection) { CommandTimeout = 60 };
             try { await command.ExecuteNonQueryAsync(); }

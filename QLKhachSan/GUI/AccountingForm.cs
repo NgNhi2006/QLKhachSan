@@ -21,16 +21,38 @@ internal sealed class AccountingForm : Form
         this.user=user;service=new HotelService(new HotelRepository(),user);
         Text="Tài chính - Kế toán";Size=new Size(1280,820);MinimumSize=new Size(950,650);
         StartPosition=FormStartPosition.CenterParent;Font=AppTheme.Body;BackColor=AppTheme.Canvas;
-        var root=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=3,ColumnCount=1,Padding=new Padding(14)};
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute,55));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,44));
-        var bar=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true};
+        var root=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=4,ColumnCount=1,Padding=new Padding(20,14,20,18),BackColor=AppTheme.Canvas};
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute,82));root.RowStyles.Add(new RowStyle(SizeType.Absolute,62));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));
+        var heading=new Panel {Dock=DockStyle.Fill,BackColor=AppTheme.Navy,Margin=new Padding(0,0,0,10)};
+        heading.Controls.Add(new Label {Text="TÀI CHÍNH  /  KẾ TOÁN",Font=AppTheme.Small,ForeColor=Color.FromArgb(223,190,137),Location=new Point(20,10),AutoSize=true});
+        heading.Controls.Add(new Label {Text="Sổ sách & đối soát",Font=AppTheme.Title,ForeColor=Color.White,Location=new Point(18,30),AutoSize=true});
+        root.Controls.Add(heading,0,0);
+        var bar=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true,BackColor=Color.White,Padding=new Padding(12,8,8,5),Margin=new Padding(0,0,0,10)};
         bar.Controls.Add(new Label {Text="Từ",AutoSize=true,Margin=new Padding(5,10,8,0)});
         from.Value=DateTime.Today.AddDays(-30);from.Width=135;bar.Controls.Add(from);
         bar.Controls.Add(new Label {Text="Đến",AutoSize=true,Margin=new Padding(15,10,8,0)});
         through.Value=DateTime.Today;through.Width=135;bar.Controls.Add(through);
         AddButton(bar,"Làm mới",async()=>await RefreshAll());
         AddButton(bar,"Xuất Excel",()=>{ExcelExport.ExportGrid(this,grids[tabs.SelectedTab!.Text],tabs.SelectedTab.Text,DateTime.Now);return Task.CompletedTask;});
-        root.Controls.Add(bar,0,0);root.Controls.Add(tabs,0,1);root.Controls.Add(summary,0,2);Controls.Add(root);
+        root.Controls.Add(bar,0,1);root.Controls.Add(tabs,0,2);root.Controls.Add(summary,0,3);Controls.Add(root);
+        tabs.Font=AppTheme.Bold;tabs.DrawMode=TabDrawMode.OwnerDrawFixed;
+        tabs.SizeMode=TabSizeMode.Fixed;tabs.ItemSize=new Size(148,42);
+        tabs.DrawItem+=(_,e)=>
+        {
+            var selected=e.Index==tabs.SelectedIndex;
+            using var fill=new SolidBrush(selected?Color.White:Color.FromArgb(239,241,238));
+            e.Graphics.FillRectangle(fill,e.Bounds);
+            if(selected)
+            {
+                using var accent=new Pen(AppTheme.Amber,3);
+                e.Graphics.DrawLine(accent,e.Bounds.Left+10,e.Bounds.Bottom-2,e.Bounds.Right-10,e.Bounds.Bottom-2);
+            }
+            TextRenderer.DrawText(e.Graphics,tabs.TabPages[e.Index].Text,AppTheme.Bold,e.Bounds,
+                selected?AppTheme.Navy:AppTheme.Muted,
+                TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+        };
+        summary.BackColor=Color.White;summary.ForeColor=AppTheme.Ink;
         if(FunctionPolicy.Can(user,"shift.manage"))AddTab("Ca trực",BuildShiftTab);
         if(FunctionPolicy.Can(user,"cash.book"))AddTab("Sổ quỹ",BuildVoucherTab);
         if(FunctionPolicy.Can(user,"cash.bank"))AddTab("Đối soát ngân hàng",BuildBankTab);
@@ -45,11 +67,11 @@ internal sealed class AccountingForm : Form
     }
     private void AddTab(string title,Action<FlowLayoutPanel> actions)
     {
-        var page=new TabPage(title) {BackColor=Color.White,Padding=new Padding(8)};
-        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=2,ColumnCount=1};
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,100));
+        var page=new TabPage(title) {BackColor=AppTheme.Canvas,Padding=new Padding(12)};
+        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=2,ColumnCount=1,BackColor=AppTheme.Canvas};
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,90));
         var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.DisplayedCells;
-        var footer=new FlowLayoutPanel {Dock=DockStyle.Fill,AutoScroll=true,WrapContents=true};
+        var footer=new FlowLayoutPanel {Dock=DockStyle.Fill,AutoScroll=true,WrapContents=true,BackColor=Color.White,Padding=new Padding(10,12,8,8),Margin=new Padding(0,10,0,0)};
         layout.Controls.Add(grid,0,0);layout.Controls.Add(footer,0,1);page.Controls.Add(layout);tabs.TabPages.Add(page);grids[title]=grid;
         actions(footer);
     }

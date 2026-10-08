@@ -1,4 +1,4 @@
-﻿using QLKhachSan.DTO;
+using QLKhachSan.DTO;
 using QLKhachSan.DAL;
 using QLKhachSan.BLL;
 
@@ -53,65 +53,14 @@ public partial class ucDashboard
                 if(Ui.Confirm(this,$"Kết thúc bảo trì phòng {room.Number}?"))await Changed(()=>service.SetRoomStatusAsync(room,RoomStatus.Trong));break;
         }
     }
-    private Task ShowBooking(bool reserve,Room? selected=null,DateTime? requestedArrival=null,int requestedDays=1)
+    private async Task ShowBooking(bool reserve,Room? selected=null,DateTime? requestedArrival=null,int requestedDays=1)
     {
-        var rooms=data.Rooms.Where(r=>reserve?r.Status!=RoomStatus.BaoTri:r.Status==RoomStatus.Trong).ToList();
-        if(rooms.Count==0)throw new BusinessException("Không có phòng phù hợp.");
-        using var dialog=new InputDialog(reserve?"Đặt phòng trước":"Nhận phòng trực tiếp",760,reserve?780:540,true);
-        var room=Ui.Combo(rooms);if(selected!=null)room.SelectedItem=rooms.Single(r=>r.Id==selected.Id);
-        Label? chosenRoom=null;
-        if(selected is not null)
-            chosenRoom=new Label {Height=36,AutoSize=false,Font=AppTheme.Bold,ForeColor=AppTheme.Ink};
-        var name=Ui.Text();var phone=Ui.Text(20);var identity=Ui.Text(20);
-        var arrival=Ui.DatePicker(requestedArrival??ServerNow.AddHours(2));var days=Ui.Number(60,requestedDays);
-        var receiveBy=Ui.DatePicker(ServerNow.AddDays(1));
-        var deposit=new CheckBox {Text="Đã thu tiền cọc",AutoSize=true};
-        var amount=Ui.Money();
-        deposit.CheckedChanged+=(_,_)=>UpdateHold();amount.ValueChanged+=(_,_)=>UpdateHold();
-        void UpdateHold()
+        if(selected is null)
         {
-            if(!reserve)return;
-            var limit=HotelService.ReservationHoldLimit(ServerNow,deposit.Checked && amount.Value>0);var departure=arrival.Value.AddDays((int)days.Value);receiveBy.Value=limit<departure?limit:departure.AddMinutes(-1);
+            ShowBookingScreen(reserve);
+            return;
         }
-        var depositInfo=new Label {AutoSize=true};
-        void UpdateDeposit(){if(room.SelectedItem is Room r){depositInfo.Text=$"Cọc gợi ý: {r.Deposit:N0} đ";amount.Value=Math.Min(amount.Maximum,r.Deposit);}}
-        room.SelectedIndexChanged+=(_,_)=>UpdateDeposit();UpdateDeposit();
-        void FilterRooms()
-        {
-            var oldId=(room.SelectedItem as Room)?.Id;
-            var from=reserve?arrival.Value:ServerNow;var until=from.AddDays((int)days.Value);
-            var matches=rooms.Where(r=>!data.Stays.Any(s=>s.RoomId==r.Id && (s.CheckIn??s.Arrival)<until && s.Departure>from));
-            if(selected is not null)matches=matches.Where(r=>r.Id==selected.Id);
-            room.DataSource=matches.ToList();
-            if(oldId is { } id && room.Items.Cast<Room>().FirstOrDefault(r=>r.Id==id) is { } previous)room.SelectedItem=previous;
-            if(chosenRoom is not null)
-            {
-                chosenRoom.Text=room.SelectedItem is Room available
-                    ? $"P.{available.Number}  •  {available.Type}  •  {available.Rate:N0} đ/ngày"
-                    : "Phòng này không còn trống trong thời gian đã chọn.";
-                chosenRoom.ForeColor=room.SelectedItem is Room ? AppTheme.Ink : Color.Firebrick;
-            }
-        }
-        arrival.ValueChanged+=(_,_)=>{FilterRooms();UpdateHold();};
-        days.ValueChanged+=(_,_)=>{FilterRooms();UpdateHold();};FilterRooms();UpdateHold();
-        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS","Công nợ OTA"});
-        var reference=Ui.Text(100);
-        dialog.Add(selected is null?"Chọn phòng":"Phòng đã chọn",selected is null?room:chosenRoom!);
-        dialog.Add("Họ và tên",name);dialog.Add("Số điện thoại",phone);dialog.Add("CCCD (12 số) / Hộ chiếu",identity);
-        if(reserve){dialog.Add("Ngày giờ dự kiến đến",arrival);dialog.Add("Hạn cuối nhận phòng (tối đa 1 hoặc 15 ngày từ lúc đặt)",receiveBy);}
-        dialog.Add("Số ngày thuê dự kiến",days);
-        if(reserve){dialog.Add("Tiền cọc",deposit);dialog.Add("",depositInfo);dialog.Add("Số tiền thực thu (đồng)",amount);dialog.Add("Hình thức thu cọc",method);dialog.Add("Mã giao dịch QR/POS",reference);}
-        if(reserve)
-        {
-            PaymentQr.Add(dialog,method,()=>amount.Value,()=>"COC PHONG "+phone.Text.Trim(),amount,phone);
-        }
-        if(reserve)dialog.Note("Chưa cọc: giữ tối đa 24 giờ. Đã cọc: giữ tối đa 15 ngày từ lúc đặt. Ngày đến phải trước hạn giữ. Quá hạn chưa nhận: tự hủy, không hoàn cọc; hủy trước hạn: hoàn cọc.");
-        dialog.Action(reserve?"LƯU ĐẶT PHÒNG":"XÁC NHẬN NHẬN PHÒNG",async()=>
-        {
-            if(room.SelectedItem is not Room chosen)throw new BusinessException("Chưa chọn phòng.");
-            await Changed(async()=> {await service.CreateStayAsync(chosen,new GuestInput(name.Text,phone.Text,identity.Text),reserve,arrival.Value,(int)days.Value,reserve && deposit.Checked,(string)method.SelectedItem!,reserve?amount.Value:0,reserve?receiveBy.Value:null,reference.Text);});
-        });
-        dialog.ShowDialog(this);return Task.CompletedTask;
+        await ShowMultipleBooking(new[]{selected},reserve,requestedArrival??ServerNow,requestedDays);
     }
     private async Task ShowCancel(Stay stay)
     {
