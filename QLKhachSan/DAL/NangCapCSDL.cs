@@ -40,17 +40,28 @@ public static class SchemaMigrator
                 await rows.DisposeAsync();
                 await using var permissionColumn = new SqlCommand("IF COL_LENGTH(N'dbo.TaiKhoanNhanVien',N'QuyenChucNang') IS NULL ALTER TABLE dbo.TaiKhoanNhanVien ADD QuyenChucNang nvarchar(max) NULL", connection);
                 await permissionColumn.ExecuteNonQueryAsync();
+                await ApplySqlResourceAsync(connection,"QLKhachSan.QuanHe_7_Bang.sql");
                 return;
             }
             if (total != 0) throw new InvalidOperationException($"CSDL hiện có {total} bảng. Hãy sao lưu và chạy quy trình chuyển đổi 7 bảng trước khi mở ứng dụng.");
         }
-        using var stream = typeof(SchemaMigrator).Assembly.GetManifestResourceStream("QLKhachSan.Database.sql")
+        await ApplySqlResourceAsync(connection,"QLKhachSan.Database.sql",true);
+        await ApplySqlResourceAsync(connection,"QLKhachSan.QuanHe_7_Bang.sql");
+    }
+
+    private static async Task ApplySqlResourceAsync(SqlConnection connection,string resource,bool skipDatabaseHeader=false)
+    {
+        using var stream = typeof(SchemaMigrator).Assembly.GetManifestResourceStream(resource)
             ?? throw new InvalidOperationException("Không tìm thấy script khởi tạo CSDL.");
         using var reader = new StreamReader(stream);
         var script = await reader.ReadToEndAsync();
-        var start = script.IndexOf("SET NOCOUNT ON;", StringComparison.OrdinalIgnoreCase);
-        if (start < 0) throw new InvalidOperationException("Script CSDL không hợp lệ.");
-        foreach (var batch in Regex.Split(script[start..], @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+        if(skipDatabaseHeader)
+        {
+            var start = script.IndexOf("SET NOCOUNT ON;", StringComparison.OrdinalIgnoreCase);
+            if (start < 0) throw new InvalidOperationException("Script CSDL không hợp lệ.");
+            script=script[start..];
+        }
+        foreach (var batch in Regex.Split(script, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(batch)) continue;
             await using var command = new SqlCommand(batch, connection) { CommandTimeout = 120 };

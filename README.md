@@ -6,6 +6,9 @@
 > database trống; chuyển đổi database có dữ liệu cần sao lưu rồi chạy quy trình
 > chuyển đổi riêng vì các bảng ngoài phạm vi sẽ bị xóa.
 
+Sơ đồ quan hệ và quy tắc chống trùng lịch hiện hành: [ERD 7 bảng](docs/ERD_7_BANG.md).
+Migration không xóa dữ liệu cho các quan hệ này: [`Database/QuanHe_7_Bang.sql`](Database/QuanHe_7_Bang.sql).
+
 > Bản đang phát triển dùng CSDL gọn V26 với 20 bảng ứng dụng. Các phần kế toán,
 > hóa đơn và menu mở rộng mô tả bên dưới là tài liệu lịch sử; xem
 > [phạm vi V26](docs/CORE20.md) trước khi nâng cấp CSDL đang dùng.

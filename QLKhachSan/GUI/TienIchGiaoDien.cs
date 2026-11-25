@@ -16,6 +16,8 @@ internal static class Ui
             SchemaMigrationException => ex.Message,
             SqlException s when s.Number is 26 or 40 or 53 or -1 => "Không kết nối được SQL Server (.\\SQLEXPRESS). Hãy mở Services, khởi động SQL Server (SQLEXPRESS), rồi bấm Thử lại kết nối. Nếu dịch vụ không khởi động, kiểm tra nhật ký lỗi SQL Server hoặc nhờ quản trị máy hỗ trợ.",
             SqlException s when s.Number==51001 => "Hệ thống đang xử lý giao dịch khác. Vui lòng thử lại.",
+            SqlException s when s.Number==51011 => "Phòng đã có lượt còn hiệu lực trong khoảng thời gian này. Hãy làm mới lịch phòng.",
+            SqlException s when s.Number is 51014 or 1205 => "Lịch phòng đang được xử lý đồng thời. Hãy làm mới rồi thử lại.",
             SqlException s when s.Number==51101 => "Kỳ kế toán đã khóa; không thể ghi hoặc sửa chứng từ thuộc kỳ này.",
             SqlException s when s.Number==51102 => "Ca đã khóa; giao dịch thuộc ca không thể sửa hoặc hủy.",
             SqlException s when s.Number==51103 => "Số dư mở sổ chỉ được ghi một lần, không thể sửa hoặc xóa.",

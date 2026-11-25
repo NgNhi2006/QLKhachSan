@@ -7,7 +7,7 @@ public sealed partial class HotelTransaction
     public async Task<long> CreateStayAsync(Room room, GuestInput guest, bool reserve, DateTime now, DateTime arrival, DateTime departure, decimal deposit, DateTime? hold, UserSession user)
     {
         await Execute("IF EXISTS(SELECT 1 FROM dbo.KhachHang WHERE SoGiayTo=@p2) UPDATE dbo.KhachHang SET Ten=@p0,SoDienThoai=@p1 WHERE SoGiayTo=@p2; ELSE INSERT dbo.KhachHang(Ten,SoDienThoai,SoGiayTo) VALUES(@p0,@p1,@p2);",guest.Name,guest.Phone,guest.Identity);
-        return await Scalar("INSERT dbo.LuotLuuTru(MaPhong,MaKhachHang,TenKhach,SoDienThoai,SoGiayTo,TrangThai,ConHieuLuc,ThoiDiemTao,ThoiDiemDen,ThoiDiemDi,ThoiDiemNhanPhong,HanGiuPhong,TienCoc,MaNhanVien) OUTPUT INSERTED.Ma SELECT @p0,Ma,@p1,@p2,@p3,@p4,1,@p5,@p6,@p7,@p8,@p9,@p10,@p11 FROM dbo.KhachHang WHERE SoGiayTo=@p3",
+        return await Scalar("INSERT dbo.LuotLuuTru(MaPhong,MaKhachHang,TenKhach,SoDienThoai,SoGiayTo,TrangThai,ConHieuLuc,ThoiDiemTao,ThoiDiemDen,ThoiDiemDi,ThoiDiemNhanPhong,HanGiuPhong,TienCoc,MaNhanVien) SELECT @p0,Ma,@p1,@p2,@p3,@p4,1,@p5,@p6,@p7,@p8,@p9,@p10,@p11 FROM dbo.KhachHang WHERE SoGiayTo=@p3; SELECT CONVERT(bigint,SCOPE_IDENTITY());",
             room.Id,guest.Name,guest.Phone,guest.Identity,reserve?"Reserved":"Occupied",now,arrival,departure,reserve?null:now,hold,deposit,user.Id);
     }
     public async Task SetRoomAsync(Room room, RoomStatus status)

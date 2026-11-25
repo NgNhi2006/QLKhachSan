@@ -94,7 +94,7 @@ public partial class ucDashboard
             var second=left+bounds.Width/2+10;var half=bounds.Width/2-15;
             Text($"Khách hàng: {invoice.Guest}",normal,left,y,half);Text($"Ngày đến: {(stay.CheckIn??stay.Arrival):dd/MM/yyyy HH:mm}",normal,second,y,half);y+=23;
             Text($"Điện thoại: {stay.Phone}",normal,left,y,half);Text($"Ngày đi: {invoice.Issued:dd/MM/yyyy HH:mm}",normal,second,y,half);y+=23;
-            Text($"Phòng: {invoice.Room}",normal,left,y,half);Text($"Hình thức: {invoice.Method}",normal,second,y,half);y+=28;
+            Text($"Phòng: {invoice.Room}",normal,left,y,half);Text($"Hình thức khi trả: {invoice.Method}",normal,second,y,half);y+=28;
             Rule(y);y+=8;
             Text("STT",bold,left,y,35);Text("Hạng mục",bold,left+38,y,bounds.Width-260);Text("SL",bold,right-218,y,45,StringAlignment.Far);Text("Đơn giá",bold,right-168,y,78,StringAlignment.Far);Text("Thành tiền",bold,right-83,y,83,StringAlignment.Far);y+=23;Rule(y);y+=7;
             if(index==0){Text("1",normal,left,y,35);Text("Tiền phòng",normal,left+38,y,bounds.Width-260);Text((discount?.GrossRoom??invoice.RoomCharge).ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;}

@@ -147,6 +147,7 @@ BEGIN
         MaLuotLuuTru bigint IDENTITY(1,1) CONSTRAINT PK_LuotLuuTru PRIMARY KEY,
         MaPhong int NOT NULL,
         MaKhachHang int NOT NULL,
+        -- Ảnh chụp thông tin khách của lượt này; KhachHang có thể được cập nhật về sau.
         TenKhach nvarchar(100) NOT NULL,
         SoDienThoai nvarchar(20) NOT NULL,
         SoGiayTo nvarchar(20) NOT NULL,
@@ -178,6 +179,8 @@ BEGIN
         TienPhong decimal(18,2) NOT NULL DEFAULT 0 CHECK(TienPhong>=0),
         TienDichVu decimal(18,2) NOT NULL DEFAULT 0,
         TienCoc decimal(18,2) NOT NULL DEFAULT 0 CHECK(TienCoc>=0),
+        -- Snapshot số thu checkout/hoàn cọc thừa tại lúc lập hóa đơn; các lần thu/hoàn
+        -- và phương thức thực tế nằm trong từng dòng GiaoDichThanhToan.
         TienDaThu decimal(18,2) NOT NULL DEFAULT 0 CHECK(TienDaThu>=0),
         TienDaHoan decimal(18,2) NOT NULL DEFAULT 0 CHECK(TienDaHoan>=0),
         PhuongThucThanhToan nvarchar(30) NOT NULL DEFAULT N'Tiền mặt',

@@ -179,7 +179,7 @@ public partial class ucDashboard
                     if(history.Columns["ThànhTiền"] is { } amount)amount.DefaultCellStyle.Format="N0";
                     var bills=await service.CustomerInvoicesAsync(customer.Id);
                     if(dialog.IsDisposed)break;
-                    invoices.DataSource=bills.Select(x=>new {MãHóaĐơn=x.Id,Phòng=x.Room,NgàyLập=x.Issued,TổngTiền=x.Total,HìnhThức=x.Method}).ToList();
+                    invoices.DataSource=bills.Select(x=>new {MãHóaĐơn=x.Id,Phòng=x.Room,NgàyLập=x.Issued,TổngTiền=x.Total,HìnhThứcKhiTrả=x.Method}).ToList();
                     if(invoices.Columns["NgàyLập"] is { } issued)issued.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";
                     if(invoices.Columns["TổngTiền"] is { } total)total.DefaultCellStyle.Format="N0";
                     break;
@@ -306,7 +306,7 @@ public partial class ucDashboard
             if(grid.Columns["Issued"] is { } issued){issued.HeaderText="Lập lúc";issued.DefaultCellStyle.Format="dd/MM/yyyy HH:mm";}
             if(grid.Columns["Total"] is { } total){total.HeaderText="Tổng tiền";total.DefaultCellStyle.Format="N0";}
             if(grid.Columns["Collected"] is { } collected){collected.HeaderText="Thu thêm";collected.DefaultCellStyle.Format="N0";}
-            if(grid.Columns["Method"] is { } method)method.HeaderText="Hình thức";
+            if(grid.Columns["Method"] is { } method)method.HeaderText="Hình thức khi trả";
             var payments=report.Payments;
             invoiceTotal.Text=$"{invoices.Sum(x=>x.Total):N0} đ";deposits.Text=$"{payments.Where(p=>p.Kind=="Deposit").Sum(p=>p.Amount):N0} đ";
             refunds.Text=$"{payments.Where(p=>p.Kind=="Refund").Sum(p=>p.Amount):N0} đ";

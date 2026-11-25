@@ -6,6 +6,16 @@ using QLKhachSan.DTO;
 using QLKhachSan.GUI;
 using QLKhachSan.DAL;
 
+if(args.Length==2 && args[0]=="--schema-migration-smoke")
+{
+    if(!new SqlConnectionStringBuilder(args[1]).InitialCatalog.Contains("_Verify_",StringComparison.Ordinal))
+        throw new InvalidOperationException("Chỉ kiểm tra migration trên database _Verify_.");
+    await SchemaMigrator.EnsureAsync(args[1]);
+    await SchemaMigrator.EnsureAsync(args[1]);
+    Console.WriteLine("SCHEMA_MIGRATION_OK");
+    return;
+}
+
 if(args.Length==2 && args[0]=="--staff-screen-smoke")
 {
     Environment.SetEnvironmentVariable("QLKHACHSAN_CONNECTION_STRING",args[1]);

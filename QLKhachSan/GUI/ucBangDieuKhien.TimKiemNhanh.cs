@@ -18,6 +18,17 @@ public partial class ucDashboard
         return result.ToString().Normalize(NormalizationForm.FormC);
     }
 
+    private static int SearchRank(SearchFunction function,string query)
+    {
+        var title=SearchText(function.Title);
+        var titleWords=title.Split(' ',StringSplitOptions.RemoveEmptyEntries);
+        var words=query.Split(' ',StringSplitOptions.RemoveEmptyEntries);
+        if(title==query)return 0;
+        if(title.StartsWith(query,StringComparison.Ordinal))return 1;
+        if(words.All(word=>titleWords.Any(part=>part.StartsWith(word,StringComparison.Ordinal))))return 2;
+        return int.MaxValue;
+    }
+
     private IEnumerable<SearchFunction> SearchableFunctions()
     {
         if(menuConfiguration is not null)
@@ -123,13 +134,10 @@ public partial class ucDashboard
             foreach(Control child in suggestions.Controls.Cast<Control>().ToArray())child.Dispose();
             matches=[];selectedIndex=0;
             if(query.Length==0){suggestions.Visible=false;return;}
-            var words=query.Split(' ',StringSplitOptions.RemoveEmptyEntries);
             matches=SearchableFunctions().DistinctBy(f=>f.Code)
-                .Select(f=>new {Item=f,Title=SearchText(f.Title),Path=SearchText(f.Path)})
-                .Where(x=>words.All(word=>x.Title.Contains(word,StringComparison.Ordinal) ||
-                    x.Path.Contains(word,StringComparison.Ordinal)))
-                .OrderBy(x=>x.Title==query?0:x.Title.StartsWith(query,StringComparison.Ordinal)?1:
-                    x.Title.Contains(query,StringComparison.Ordinal)?2:3)
+                .Select(f=>new {Item=f,Rank=SearchRank(f,query)})
+                .Where(x=>x.Rank!=int.MaxValue)
+                .OrderBy(x=>x.Rank)
                 .ThenBy(x=>x.Item.Title).Take(8).Select(x=>x.Item).ToList();
             if(matches.Count==0)
                 suggestions.Controls.Add(new Label {Text="Không tìm thấy chức năng phù hợp",
@@ -138,7 +146,7 @@ public partial class ucDashboard
             for(var i=0;i<matches.Count;i++)
             {
                 var match=matches[i];
-                var item=new Button {Text=$"{match.Title}    ·    {match.Path}",Tag=match,
+                var item=new Button {Text=$"⌕    {match.Title}",Tag=match,
                     Location=new Point(4,4+i*44),Size=new Size(Math.Max(300,surface.Width-12),42),
                     TextAlign=ContentAlignment.MiddleLeft,FlatStyle=FlatStyle.Flat,
                     BackColor=i==selectedIndex?Color.FromArgb(239,245,251):Color.White,
