@@ -7,3 +7,19 @@ review-backup/
 _DbBackup/
 **/.build-check/
 .verify-build/
+
+# Local build, preview, and report outputs
+/.build*/
+/tmp*/
+/extracted_media/
+/pdf_sample_images/
+/__pycache__/
+*.pyc
+~$*.docx
+/*.docx
+/*.pdf
+/*.png
+/*.txt
+/report_builder/
+/*.py
+/*.json
