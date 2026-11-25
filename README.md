@@ -1,120 +1,61 @@
-# QLKhachSan — quản lý khách sạn (CSDL 7 bảng)
+# QLKhachSan
 
-> Phạm vi hiện hành là 7 bảng: `Phong`, `KhachHang`, `TaiKhoanNhanVien`,
-> `LuotLuuTru`, `HoaDon`, `CaTruc`, `GiaoDichThanhToan`. Các mô tả V26/20 bảng
-> phía dưới là tài liệu lịch sử và có thể không còn đúng. Ứng dụng chỉ tự khởi tạo
-> database trống; chuyển đổi database có dữ liệu cần sao lưu rồi chạy quy trình
-> chuyển đổi riêng vì các bảng ngoài phạm vi sẽ bị xóa.
+Ứng dụng quản lý khách sạn viết bằng Windows Forms trên .NET 10, dùng SQL Server và tổ chức mã theo các lớp GUI, BLL, DAL, DTO. Solution chính là `QLKhachSan.slnx`.
 
-Sơ đồ quan hệ và quy tắc chống trùng lịch hiện hành: [ERD 7 bảng](docs/ERD_7_BANG.md).
-Migration không xóa dữ liệu cho các quan hệ này: [`Database/QuanHe_7_Bang.sql`](Database/QuanHe_7_Bang.sql).
+## Yêu cầu
 
-> Bản đang phát triển dùng CSDL gọn V26 với 20 bảng ứng dụng. Các phần kế toán,
-> hóa đơn và menu mở rộng mô tả bên dưới là tài liệu lịch sử; xem
-> [phạm vi V26](docs/CORE20.md) trước khi nâng cấp CSDL đang dùng.
+- Windows và .NET SDK 10 để build, chạy từ mã nguồn.
+- SQL Server hoặc SQL Server Express. Cấu hình mặc định dùng instance `.\SQLEXPRESS`, database `QLKhachSanApp` và Windows Authentication.
+- Visual Studio có hỗ trợ .NET 10 nếu build bằng giao diện.
 
-Ứng dụng WinForms .NET 10, SQL Server Express, phân tầng GUI / BLL / DAL / DTO.
+## Cấu trúc dự án
 
-## Đọc tài liệu
+| Đường dẫn | Nội dung |
+| --- | --- |
+| `QLKhachSan/` | Ứng dụng WinForms, mã nguồn và tài nguyên giao diện |
+| `Database/Database.sql` | Script tạo database theo cấu trúc 7 bảng hiện hành |
+| `Database/QuanHe_7_Bang.sql` | Quan hệ và ràng buộc cho cấu trúc 7 bảng |
+| `Database/ChuanHoa_7_Bang.sql` | Script chuẩn hóa cấu trúc 7 bảng |
+| `tests/` | Các chương trình và script kiểm tra |
 
-**[Thông tin và giải thích mã nguồn](docs/THONG_TIN.md)** — tra chức năng, nút bấm, luồng dữ liệu, mã giao diện, nghiệp vụ, SQL, cấu hình và các ví dụ theo dõi thao tác.
+Bảy bảng nghiệp vụ là `Phong`, `KhachHang`, `TaiKhoanNhanVien`, `LuotLuuTru`, `HoaDon`, `CaTruc` và `GiaoDichThanhToan`.
 
-**[Phân hệ Tài chính - Kế toán](docs/ACCOUNTING_FINANCE.md)** — quy trình ca, khóa kỳ, sổ quỹ, công nợ, kho minibar, đối soát và giới hạn báo cáo.
+## Cấu hình database
 
-**[Đối chiếu 9 bảng menu và 37 chức năng](docs/MENU_DATABASE_MAPPING.md)** — tên bảng, menu con, mã chức năng và dòng mã xử lý.
+1. Cài SQL Server Express hoặc dùng một SQL Server sẵn có.
+2. Mở `QLKhachSan/appsettings.json` và sửa `ConnectionString` nếu tên máy chủ, instance hoặc database khác mặc định. Có thể đặt biến môi trường `QLKHACHSAN_CONNECTION_STRING` để ghi đè kết nối.
+3. Với database **mới, chưa có dữ liệu**, chạy `Database/Database.sql` trong SQL Server Management Studio để tạo schema. Ứng dụng cũng có thể khởi tạo database trống khi tài khoản SQL có đủ quyền.
 
-**[Tên cột CSDL tiếng Việt](docs/COT_DATABASE.md)** — đối chiếu 120 tên cột cũ và mới, ví dụ truy vấn và cách xem mô tả trong SQL Server.
+`Database/Database.sql` có các lệnh xóa bảng cũ ngoài phạm vi 7 bảng. Trước khi chạy trên database đang có dữ liệu, hãy sao lưu và kiểm tra script trên bản sao. Không dùng script khởi tạo như một bản cập nhật dữ liệu thông thường.
 
-**[Biên bản kiểm thử V11](docs/V11_VERIFICATION.md)** — kết quả nâng cấp bản sao V9, chạy lại script, đối chiếu dữ liệu cũ và kiểm thử giao dịch gộp, rollback, phân quyền.
+## Build và chạy
 
-Đây là liên kết Markdown đến một tệp khác trong dự án: bấm **Thông tin** trên GitHub hoặc trong trình xem Markdown sẽ mở tài liệu chi tiết. Tài liệu có mục lục, ví dụ dễ hiểu và bảng tra cứu **ô nhập/dữ liệu nguồn → nút → hàm GUI → hàm BLL → câu SQL/bảng → kết quả trên màn hình**. Số dòng được đối chiếu với mã nguồn hiện tại; nếu sửa code sau này, số dòng có thể dịch chuyển.
-
-## Chạy ứng dụng
-
-- Mở `QLKhachSan.slnx`, chọn `QLKhachSan` làm startup project và F5; hoặc `dotnet run --project QLKhachSan`.
-- Cần .NET SDK 10 để build; bản publish cần .NET Desktop Runtime 10.
-- Kết nối mặc định: `.\SQLEXPRESS`, database `QLKhachSanApp`, Windows Authentication.
-- Máy mới: ứng dụng tự tạo 7 bảng trên database trống, hoặc chạy [`Database/Database.sql`](Database/Database.sql) trong SSMS. Với database có dữ liệu, sao lưu và kiểm tra bản sao lưu trước khi chuyển đổi; ứng dụng không tự xóa bảng cũ.
-- File SQL chạy trong SSMS thông thường, không cần SQLCMD mode. Các phần nâng cấp dùng transaction, khóa và có thể chạy lại.
-- Nếu chạy bằng `sqlcmd`, dùng `-f 65001` để giữ nguyên tên menu và chuỗi tiếng Việt UTF-8.
-- Khi nâng cấp: đóng tất cả phiên ứng dụng cũ, sao lưu database và kiểm tra khôi phục trước. Bản cũ không tương thích với schema mới.
-- Migration giữ dữ liệu và hạn nhận của các lượt đặt cũ. Trạng thái vật lý `DaDat` được chuyển thành `Trong`; lịch đặt vẫn nằm trong `LuotLuuTru`.
-- Migration V3 lưu trữ và vô hiệu hóa toàn bộ tài khoản đăng nhập cũ, giữ các bản ghi để hóa đơn và nhật ký không mất người thực hiện. Lần đăng nhập đầu sau nâng cấp cần tạo Admin mới; có thể dùng lại tên đăng nhập cũ. Tài khoản SQL chạy migration cần quyền thay đổi schema.
-
-## Cấu hình
-
-`QLKhachSan/appsettings.json` được copy vào thư mục build/publish. Có thể thay connection string bằng biến môi trường `QLKHACHSAN_CONNECTION_STRING`.
-
-Điền `BankCode`, `BankAccount`, `BankAccountName` để bật VietQR khi chọn chuyển khoản. Nhân viên tự kiểm tra tiền thực nhận; chưa có đối soát tự động.
-
-Kết nối SQL Express cục bộ dùng `Encrypt=True;TrustServerCertificate=True`. Khi triển khai máy chủ riêng, dùng chứng chỉ hợp lệ và `TrustServerCertificate=False`. Quyền ứng dụng không thay thế quyền SQL của tài khoản Windows.
-
-## Chính sách đặt phòng và cọc
-
-- Lịch đặt tách khỏi trạng thái vật lý của phòng. Một phòng có nhiều lượt đặt nếu khoảng `[ngày đến, ngày trả)` không giao nhau. Các lượt liền kề được phép đặt; lúc nhận phòng vẫn bắt buộc phòng đã trống và dọn xong.
-- Đặt trước có thời lượng lưu trú 1–60 ngày. Lượt chưa thu cọc giữ tối đa 24 giờ, lượt đã thu cọc giữ tối đa 15 ngày, tính từ lúc tạo đặt phòng; ngày đến không được sau hạn nhận. Đặt trước được trên phòng đang ở nếu khoảng ngày không trùng. Không đặt phòng đang bảo trì.
-- Hạn nhận có thể chỉnh từ giờ đến đến trước ngày trả nhưng không vượt giới hạn giữ chỗ. Thu cọc lần đầu trong hạn chuyển giới hạn tối đa từ 24 giờ sang 15 ngày tính từ lúc tạo đặt phòng, nhưng hạn thực tế vẫn phải trước ngày trả. Lượt đã có cọc giữ nguyên hạn đã lưu khi thu thêm.
-- **Quá hạn nhận mà chưa check-in: hủy lượt, không hoàn toàn bộ tiền cọc.** Chính xác tại hạn cũng được xem là quá hạn. Lượt không có cọc cũng được hủy để giải phóng lịch.
-- Hủy trước hạn: hoàn toàn bộ cọc. Nếu màn hình hoàn tiền đã mở nhưng sau đó vượt hạn, hệ thống từ chối số tiền hoàn cũ và yêu cầu mở lại.
-- Tự xử lý quá hạn lúc mở Menu chính, làm mới và mỗi phút khi ứng dụng rảnh. Không có Windows service độc lập: khi ứng dụng đóng hoặc đang mở dialog, xử lý được thực hiện ở lần refresh tiếp theo. Nghiệp vụ nhận/sửa/thu thêm/hủy vẫn kiểm tra hạn theo giờ SQL ngay tại giao dịch.
-- Cọc có thể nhập số tiền thực thu, thu nhiều đợt. Thu thêm không kéo dài hạn nhận. Không nhận thêm cọc hoặc sửa lịch của lượt đã quá hạn.
-- Cọc mất được lưu bằng `GiaoDichThanhToan.LoaiGiaoDich='Forfeit'`, có unique index cho mỗi lượt và audit `NoShow`. Đây là ghi nhận khoản cọc đã thu, **không phải lần thu tiền mới**. Không tạo `Refund` cho lượt quá hạn.
-- Kiểm tra trùng lịch được thực hiện trong transaction khi đặt/sửa lịch, nhận, đổi và gia hạn phòng. Nhận sớm/muộn vẫn giữ số ngày dự kiến; nếu ngày trả mới đè lên lịch khác thì bị từ chối.
-
-## Nghiệp vụ và giao diện
-
-Vai trò đăng nhập: **Admin** (vận hành, kế toán, tài khoản), **Reception** (phòng, lịch đặt, dịch vụ, khách, ca cá nhân), **Accountant** (sổ sách, khóa ca/kỳ), **Manager** (vận hành và tài chính). Accountant và Manager không thực hiện nghiệp vụ lễ tân; các quyền ghi sổ được kiểm soát riêng trong phân hệ kế toán. Admin quản lý tạo, đổi quyền, khóa và đặt lại mật khẩu nhân viên trong màn hình **Tài khoản & Nhân viên**.
-
-Sau khi đăng nhập, ứng dụng đi theo luồng **Menu tổng → Menu con → Màn hình chức năng**. Menu tổng có sáu nhóm mặc định: **Quản lý phòng**, **Dịch vụ**, **Khách hàng**, **Ca trực**, **Tài chính**, **Nhân viên & hệ thống**. **Tài chính** gom Thu chi, Hóa đơn, Báo cáo; **Nhân viên & hệ thống** gom nhân sự, tài khoản, bảo mật và nhật ký; bấm **Ca trực** mở thẳng màn hình Ca trực. Các ô dàn theo khung cửa sổ; chỉ nhóm có chức năng được cấp quyền mới xuất hiện. Có nút trở lại Menu tổng từ menu con và màn hình chức năng. Không có trang Tổng quan.
-
-Menu tổng và menu con dùng ô chức năng có biểu tượng để nhân viên chọn nhanh. **Nhận phòng trực tiếp** mở bảng phòng trống; **Đặt phòng trước** mở bảng phòng còn chỗ theo ngày đến và số ngày thuê. Nhân viên lọc theo số/loại phòng, chọn một dòng rồi mới nhập thông tin khách. **Thu cọc, nhận phòng đã đặt, sửa và hủy lượt đặt** dùng bảng lượt đặt có tìm kiếm theo phòng, khách hoặc điện thoại. Hệ thống kiểm tra lại tình trạng và lịch phòng trong giao dịch lưu.
-
-**Quản lý phòng** gồm các menu con Phòng, Đặt phòng, Lưu trú, Buồng phòng và Danh mục phòng. Toàn bộ gọi/xử lý dịch vụ, danh mục dịch vụ và kho minibar nằm trong menu tổng **Dịch vụ**. Admin cấp quyền từng chức năng cho nhân viên tại **Nhân viên → Phân quyền → Tài khoản & phân quyền → Quyền chức năng**. Vai trò giới hạn danh sách quyền tối đa; quyền cá nhân quyết định chức năng nào hiện và được thực thi. Đổi quyền làm phiên cũ hết hiệu lực.
-
-Admin có thể mở **Tùy chỉnh menu → Chức năng → Thiết kế chức năng** để tạo một màn hình nhập liệu mới. Trình dựng hỗ trợ ô văn bản, nhiều dòng, số, ngày, đánh dấu và lựa chọn; ô rộng hoặc nửa hàng; quyền theo vai trò; xem trước và đổi nhãn các nút Tạo mới/Lưu/Xóa. Dữ liệu của chức năng mới được lưu riêng trong `DuLieuChucNangMoi`, có tra cứu, sửa, xóa và nhật ký thao tác. Các màn hình tự thiết kế dùng để quản lý dữ liệu riêng; một nghiệp vụ tác động đến đặt phòng, thanh toán hoặc bảng hiện có vẫn cần mã xử lý ứng dụng tương ứng.
-
-Trong **Tùy chỉnh menu → Cấu trúc menu**, chọn menu chính để thêm menu con, rồi chọn menu con để thiết kế chức năng mới. Sửa mục trong cây cho phép đổi mã menu tự tạo, đổi menu mẹ của menu con, đổi menu con của chức năng, cũng như chỉnh tên, thứ tự, trạng thái và bố cục màn hình tự thiết kế. Xóa một menu tự tạo sẽ xóa các menu con và chức năng tự tạo bên trong cùng giao dịch; thao tác bị từ chối nếu chứa mục có sẵn hoặc chức năng mới đã có bản ghi.
-
-Migration V7 thêm các bảng cấu trúc menu và quyền từng tài khoản. V8 thêm chín bảng chức năng theo chín menu tổng. Mọi lệnh `CREATE TABLE` trong file SQL dùng tên bảng tiếng Việt không dấu, ví dụ `Phong`, `LuotLuuTru`, `HoaDon`, `ChucNangQuanLyPhong`. Với bản cài V1–V8 cũ, đoạn chuyển đổi đầu file đổi tên 39 bảng tại chỗ trước khi nâng cấp tiếp; dữ liệu và khóa ngoại được giữ nguyên. V9 đánh dấu cấu trúc bảng hoàn tất. V10 đổi tên cột sang tiếng Việt không dấu và gắn mô tả tiếng Việt cho tất cả bảng/cột; bản đang dùng được nâng cấp tại chỗ, giữ dữ liệu. Ứng dụng đọc các bảng menu khi đăng nhập và cấp quyền. Tài khoản cũ mặc định nhận các chức năng của vai trò hiện tại cho đến khi Admin tùy chỉnh. Xem [danh sách tên bảng](docs/MENU_DATABASE_MAPPING.md#ten-bang-sau-v9) và [danh sách tên cột](docs/COT_DATABASE.md).
-
-- Sơ đồ hiển thị trạng thái vật lý; dấu `*` sau số phòng báo có lịch đặt. Nhận lượt đã đặt bằng nút **Nhận phòng** ở danh sách đặt hoặc lịch đến/đi.
-- **Sửa thông tin khách**: trên bảng đặt trước, bấm nút ở đúng dòng khách còn chờ nhận để sửa họ tên, SĐT, CCCD/hộ chiếu, hoặc phòng/ngày/hạn nhận; bắt buộc lý do và giữ nguyên tiền đã thu. Xem [đường sửa và bảng dữ liệu liên quan](docs/THONG_TIN.md#sua-thong-tin-khach).
-- **Lịch đặt / Lịch sử**: xem lượt hoạt động theo khoảng ngày hoặc tra cứu 500 lượt gần nhất theo tên/SĐT/giấy tờ, gồm lượt hủy. Xuất CSV UTF-8.
-- **Thu cọc bổ sung**: chọn lượt, số tiền, phương thức và xác nhận thực thu.
-- **Xử lý dịch vụ**: sửa số lượng có lý do, hủy dòng chưa giao, giao từng phần. Sau khi giao một phần chỉ được giảm xuống ít nhất số đã giao. Dòng hủy còn trong lịch sử, không tính tiền. Không sửa dịch vụ của lượt đã thanh toán.
-- Danh mục phòng và dịch vụ được lưu trong database để phục vụ đặt phòng, gọi dịch vụ và tính tiền. **Danh mục phòng** và **Bảng giá phòng** thuộc Quản lý phòng; **Danh mục dịch vụ** và **Kho minibar** thuộc Dịch vụ. Bảo trì phòng chỉ khi đã xử lý hết lịch đặt.
-- **Tài khoản & Nhân viên** (Admin): tạo tài khoản, đổi quyền, khóa/mở và đặt lại mật khẩu trên cùng một màn hình. Không sửa quyền hoặc khóa tài khoản đang sử dụng.
-- Đổi mật khẩu, đặt lại mật khẩu, đổi quyền hoặc khóa tài khoản làm mất hiệu lực phiên cũ. Phiên tự đổi mật khẩu được cập nhật sau khi giao dịch thành công.
-- **Nhật ký thao tác** (Admin): xem tối đa 1.000 thao tác gần nhất theo ngày.
-
-## Tài chính - Kế toán (schema V6)
-
-Mở **Ca trực → Ca trực → Ca trực / bàn giao** từ Menu tổng. Sổ quỹ và các khoản thu chi ở **Thu chi**; hóa đơn và nhóm bill ở **Hóa đơn**; doanh thu và lãi lỗ ở **Báo cáo**; kho minibar ở **Dịch vụ**. Các tab tài chính chỉ hiện khi tài khoản có quyền tương ứng. Khoảng báo cáo tối đa 367 ngày. Chi tiết nghiệp vụ và giới hạn số liệu xem [tài liệu Tài chính - Kế toán](docs/ACCOUNTING_FINANCE.md).
-
-- Mở ca với tiền đầu ca, nộp ca bằng tiền thực đếm và giải trình chênh lệch; Kế toán/Quản lý/Admin khóa ca đã bàn giao và khóa kỳ theo tháng. Trigger SQL chặn ghi vào ca/kỳ đã khóa.
-- Sổ quỹ theo Cash/Bank/POS/OTA gồm số dư mở sổ, thanh toán và phiếu thu/chi; QR/POS có mã giao dịch. Nhập sao kê Bank/POS rồi đối soát theo kênh, mã và số tiền.
-- Công nợ AR/AP có hạn thanh toán, tuổi nợ và phân bổ từng phiếu thu/chi. Kho minibar dùng giá vốn bình quân, ghi xuất bán khi giao dịch vụ, xuất hủy/dùng nội bộ và đối chiếu với báo cáo buồng phòng.
-- Hóa đơn hỗ trợ hủy có lý do, giảm trừ có người duyệt, phân bổ tách/gộp bill và ghi nhận số e-Invoice. VAT, phí phục vụ và đơn vị làm tròn được lưu để đối chiếu; hiện chưa tự cộng các khoản đó vào hóa đơn gốc hoặc phát hành hóa đơn điện tử.
-- Lãi lỗ và ADR/RevPAR/tỷ lệ lấp đầy là báo cáo quản trị sơ bộ: chưa có tồn phòng khả dụng theo từng đêm lịch sử; doanh thu và giá vốn có thể ở khác kỳ.
-
-Các migration chạy trong transaction. Nếu nâng cấp thất bại, màn hình đăng nhập hiển thị phiên bản, mã lỗi SQL và số dòng để xác định nguyên nhân; sửa lỗi rồi khởi động lại. Hãy thử trên bản sao database trước khi đưa vào vận hành.
-
-## Tính tiền và báo cáo
-
-- Tiền phòng: tối thiểu 1 ngày, làm tròn tổng thời gian ở lên ngày 24 giờ. Nếu đổi phòng, chia thời gian thực theo giá đã lưu; phần ngày còn thiếu tính theo giá phòng cuối. Làm tròn tiền phòng đến 1 đồng.
-- Bảng tính checkout giữ giá 10 phút; nghiệp vụ khác thay đổi lượt sẽ làm bảng tính cũ hết hiệu lực. Chỉ checkout khi dịch vụ chưa hủy đã giao đủ. Mỗi lượt chỉ có một hóa đơn.
-- Cọc thừa khi checkout vẫn được hoàn; chính sách mất cọc chỉ áp dụng khách đặt phòng quá hạn chưa nhận.
-- Ngày lập hóa đơn và ngày thu checkout lấy thời điểm xác nhận. Thời điểm chốt giá phòng được giữ riêng qua thời điểm kết thúc `ChangLuuTru`.
-- **Hóa đơn / Doanh thu**: khoảng ngày tối đa 367 ngày; doanh thu hóa đơn và cọc không hoàn hiển thị riêng. Thu cọc, thu checkout, hoàn cọc, phương thức và nhân viên được liệt kê để đối chiếu thu/chi.
-- `Forfeit` có dòng tiền bằng 0. Không cộng lại cọc mất vào tiền thực thu. Phân hệ kế toán V6 có mở, bàn giao và khóa ca với số dư đầu/cuối.
-- Mọi lưới có menu xuất `.xlsx`; một số báo cáo cũ vẫn có nút xuất CSV UTF-8. Xem trước/in phiếu thanh toán, phiếu thu/chi, biên bản ca và báo cáo công nợ. Phiếu thanh toán nội bộ chưa phải hóa đơn thuế điện tử.
-- Ứng dụng dùng giờ SQL Server làm mốc; máy trạm và SQL Server cần cùng múi giờ Việt Nam.
-
-## Build và xuất bản
+Tại thư mục gốc của repo:
 
 ```powershell
-dotnet build QLKhachSan.slnx -c Release -warnaserror
-dotnet publish QLKhachSan/QLKhachSan.csproj -c Release --no-restore -o artifacts/publish
+dotnet restore QLKhachSan.slnx
+dotnet build QLKhachSan.slnx -c Release --no-restore
+dotnet run --project QLKhachSan/QLKhachSan.csproj -c Release --no-build
 ```
 
-Không chạy ứng dụng cũ sau khi nâng schema. Bản này chưa có đặt đoàn/nhiều khách trong phòng, giá giờ/ngày lễ/khuyến mãi, đồng bộ OTA, đối soát ngân hàng tự động hoặc dịch vụ xử lý quá hạn khi ứng dụng đóng.
+Hoặc mở `QLKhachSan.slnx` trong Visual Studio, chọn `QLKhachSan` làm startup project và nhấn F5. Khi chạy trên máy khác, cần .NET Desktop Runtime 10 cùng cấu hình SQL Server phù hợp.
+
+Để tạo thư mục phát hành:
+
+```powershell
+dotnet publish QLKhachSan/QLKhachSan.csproj -c Release -o artifacts/publish
+```
+
+Thư mục `artifacts/`, các thư mục `bin/` và `obj/` được Git bỏ qua.
+
+## Kiểm tra
+
+```powershell
+dotnet build QLKhachSan.slnx -c Release
+```
+
+`tests/relations_7_tables.sql` dùng để kiểm tra ràng buộc database trên môi trường thử nghiệm; không chạy trực tiếp trên database vận hành. `tests/V11Verifier` là bộ kiểm tra cho schema cũ và chỉ chạy được với database thử nghiệm phù hợp.
+
+## Cấu hình ứng dụng
+
+`QLKhachSan/appsettings.json` được sao chép vào thư mục build. Các trường `BankCode`, `BankAccount` và `BankAccountName` dùng cho thông tin chuyển khoản/VietQR. Nhân viên cần xác nhận tiền thực nhận; ứng dụng không tự đối soát giao dịch ngân hàng.
