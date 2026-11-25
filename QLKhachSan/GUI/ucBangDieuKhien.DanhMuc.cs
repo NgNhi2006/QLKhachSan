@@ -35,7 +35,7 @@ public partial class ucDashboard
         async Task LoadRooms()
         {
             await Reload();rooms.DataSource=data.Rooms.OrderBy(x=>x.Number).ToList();
-            FormatGrid(rooms,new() {{"Number","Phòng"},{"Type","Loại"},{"Rate","Giá/ngày"},{"Deposit","Cọc"},{"Status","Trạng thái"}});
+            FormatGrid(rooms,new() {{"Code","Mã phòng"},{"Number","Phòng"},{"Type","Loại"},{"Rate","Giá/ngày"},{"Deposit","Cọc"},{"Status","Trạng thái"}});
             HideColumns(rooms,"Id","Version");
         }
         rooms.SelectionChanged+=(_,_)=>{if(rooms.CurrentRow?.DataBoundItem is Room room)roomPrice.Value=Math.Clamp(room.Rate,roomPrice.Minimum,roomPrice.Maximum);};
@@ -65,7 +65,7 @@ public partial class ucDashboard
         listCard.RowStyles.Add(new RowStyle(SizeType.Absolute,36));listCard.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
         listCard.RowStyles.Add(new RowStyle(SizeType.Absolute,52));body.Controls.Add(listCard,0,0);
         var tabs=new TabControl {Dock=DockStyle.Fill,Font=AppTheme.Bold};
-        foreach(var title in new[]{"Phòng đơn","Phòng đôi","Phòng VIP","Phòng tình nhân"})tabs.TabPages.Add(title);
+        foreach(var title in new[]{"Phòng đơn","Phòng đôi","Phòng VIP"})tabs.TabPages.Add(title);
         listCard.Controls.Add(tabs,0,0);
         var grid=Ui.Grid();grid.MultiSelect=true;grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;grid.Dock=DockStyle.Fill;
         listCard.Controls.Add(grid,0,1);
@@ -94,7 +94,7 @@ public partial class ucDashboard
         var addCard=Card();editor.Controls.Add(addCard,0,0);
         AddRow(addCard,new Label {Text="THÊM PHÒNG MỚI",Font=AppTheme.Bold,ForeColor=AppTheme.Ink},32);
         var number=Ui.Text(10);number.PlaceholderText="Ví dụ: 411";
-        var newType=Ui.Combo(new[]{"Đơn","Đôi","VIP","Tình nhân"});var newRate=Ui.Money();var newDeposit=Ui.Money();
+        var newType=Ui.Combo(new[]{"Đơn","Đôi","VIP"});var newRate=Ui.Money();var newDeposit=Ui.Money();
         AddRow(addCard,Caption("Số phòng"),24);AddRow(addCard,number,34);
         AddRow(addCard,Caption("Loại phòng"),24);AddRow(addCard,newType,34);
         AddRow(addCard,Caption("Giá mỗi ngày (đ)"),24);AddRow(addCard,newRate,34);
@@ -106,7 +106,7 @@ public partial class ucDashboard
         AddRow(bulkCard,new Label {Text="Tích thông tin cần đổi; ô không tích sẽ giữ nguyên.",ForeColor=AppTheme.Muted},28);
         var changeRate=new CheckBox {Text="Đổi giá mỗi ngày",AutoSize=true};var bulkRate=Ui.Money();
         var changeDeposit=new CheckBox {Text="Đổi cọc gợi ý",AutoSize=true};var bulkDeposit=Ui.Money();
-        var changeType=new CheckBox {Text="Đổi loại phòng",AutoSize=true};var bulkType=Ui.Combo(new[]{"Đơn","Đôi","VIP","Tình nhân"});
+        var changeType=new CheckBox {Text="Đổi loại phòng",AutoSize=true};var bulkType=Ui.Combo(new[]{"Đơn","Đôi","VIP"});
         bulkRate.Enabled=false;bulkDeposit.Enabled=false;bulkType.Enabled=false;
         changeRate.CheckedChanged+=(_,_)=>bulkRate.Enabled=changeRate.Checked;
         changeDeposit.CheckedChanged+=(_,_)=>bulkDeposit.Enabled=changeDeposit.Checked;
@@ -124,7 +124,7 @@ public partial class ucDashboard
             if(SelectedRooms() is not [{ } selected]){Ui.Error(form,new BusinessException("Chọn đúng một phòng để sửa."));return;}
             using var editorDialog=new InputDialog($"Sửa phòng {selected.Number}",620,570);
             var editNumber=Ui.Text(10);editNumber.Text=selected.Number;
-            var editType=Ui.Combo(new[]{"Đơn","Đôi","VIP","Tình nhân"});editType.SelectedItem=selected.Type;
+            var editType=Ui.Combo(new[]{"Đơn","Đôi","VIP"});editType.SelectedItem=selected.Type;
             var editRate=Ui.Money();editRate.Value=Math.Clamp(selected.Rate,editRate.Minimum,editRate.Maximum);
             var editDeposit=Ui.Money();editDeposit.Value=Math.Clamp(selected.Deposit,editDeposit.Minimum,editDeposit.Maximum);
             editorDialog.Add("Số phòng",editNumber);editorDialog.Add("Loại phòng",editType);
@@ -148,16 +148,17 @@ public partial class ucDashboard
         async Task LoadRows()
         {
             await Reload();
-            var group=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",3=>"Tình nhân",_=>"Đơn"};
+            var group=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",_=>"Đơn"};
             grid.DataSource=data.Rooms.Where(r=>r.Type==group).OrderBy(r=>r.Number).ToList();
-            FormatGrid(grid,new() {{"Number","Số phòng"},{"Type","Loại"},{"Rate","Giá/ngày"},{"Deposit","Cọc gợi ý"},{"Status","Trạng thái"}});
+            FormatGrid(grid,new() {{"Code","Mã phòng"},{"Number","Số phòng"},{"Type","Loại"},{"Rate","Giá/ngày"},{"Deposit","Cọc gợi ý"},{"Status","Trạng thái"}});
+            if(grid.Columns["Code"] is { } roomCode)roomCode.DisplayIndex=0;
             HideColumns(grid,"Id","Version");grid.ClearSelection();UpdateSelection();
         }
         void SuggestNewRoom()
         {
-            var group=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",3=>"Tình nhân",_=>"Đơn"};
+            var group=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",_=>"Đơn"};
             var groupRooms=data.Rooms.Where(r=>r.Type==group).ToList();
-            var start=tabs.SelectedIndex switch {1=>200,2=>300,3=>400,_=>100};
+            var start=tabs.SelectedIndex switch {1=>200,2=>300,_=>100};
             number.Text=(Math.Max(start,groupRooms.Select(r=>int.TryParse(r.Number,out var value)?value:start).DefaultIfEmpty(start).Max())+1).ToString();
             if(groupRooms.FirstOrDefault() is { } sample)
             {
@@ -165,7 +166,7 @@ public partial class ucDashboard
                 newDeposit.Value=Math.Clamp(sample.Deposit,newDeposit.Minimum,newDeposit.Maximum);
             }
         }
-        tabs.SelectedIndexChanged+=async (_,_)=>{newType.SelectedItem=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",3=>"Tình nhân",_=>"Đơn"};await LoadRows();SuggestNewRoom();};
+        tabs.SelectedIndexChanged+=async (_,_)=>{newType.SelectedItem=tabs.SelectedIndex switch {1=>"Đôi",2=>"VIP",_=>"Đơn"};await LoadRows();SuggestNewRoom();};
         addButton.Click+=async (_,_)=>
         {
             addButton.Enabled=false;
@@ -173,7 +174,7 @@ public partial class ucDashboard
             {
                 var room=new Room(0,number.Text,(string)newType.SelectedItem!,newRate.Value,newDeposit.Value,RoomStatus.Trong,0);
                 await service.SaveRoomAsync(room);
-                var targetTab=Array.IndexOf(new[]{"Đơn","Đôi","VIP","Tình nhân"},room.Type);
+                var targetTab=Array.IndexOf(new[]{"Đơn","Đôi","VIP"},room.Type);
                 if(tabs.SelectedIndex==targetTab){await LoadRows();SuggestNewRoom();}
                 else tabs.SelectedIndex=targetTab;
                 number.Focus();

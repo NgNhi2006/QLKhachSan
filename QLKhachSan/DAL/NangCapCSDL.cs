@@ -10,73 +10,51 @@ public static class SchemaMigrator
 {
     public static async Task EnsureAsync(string? connectionString = null)
     {
-        await using var connection = new SqlConnection(connectionString ?? AppSettings.Load().ConnectionString);
+        var rawConnStr = connectionString ?? AppSettings.Load().ConnectionString;
+        var builder = new SqlConnectionStringBuilder(rawConnStr);
+        var dbName = string.IsNullOrWhiteSpace(builder.InitialCatalog) ? "QLKhachSanApp" : builder.InitialCatalog;
+
+        // 1. Đảm bảo Database QLKhachSanApp đã được tạo trên SQL Server
+        var masterBuilder = new SqlConnectionStringBuilder(rawConnStr) { InitialCatalog = "master", ConnectTimeout = 10 };
+        await using var masterConn = new SqlConnection(masterBuilder.ConnectionString);
+        await masterConn.OpenAsync();
+        var safeName = dbName.Replace("]", "]]", StringComparison.Ordinal);
+        await using var createCmd = new SqlCommand($"IF DB_ID(@name) IS NULL EXEC(N'CREATE DATABASE [{safeName}]')", masterConn);
+        createCmd.Parameters.AddWithValue("@name", dbName);
+        await createCmd.ExecuteNonQueryAsync();
+
+        // 2. Kết nối vào CSDL QLKhachSanApp
+        builder.InitialCatalog = dbName;
+        await using var connection = new SqlConnection(builder.ConnectionString);
         await connection.OpenAsync();
-        // Determine the known table/column combination before constructing the version query.
-        await using var shape = new SqlCommand("""
-            SELECT CASE
-                WHEN OBJECT_ID(N'dbo.PhienBanCSDL', N'U') IS NOT NULL
-                     AND COL_LENGTH(N'dbo.PhienBanCSDL', N'PhienBan') IS NOT NULL THEN 2
-                WHEN OBJECT_ID(N'dbo.PhienBanCSDL', N'U') IS NOT NULL
-                     AND COL_LENGTH(N'dbo.PhienBanCSDL', N'Version') IS NOT NULL THEN 1
-                WHEN OBJECT_ID(N'dbo.SchemaVersion', N'U') IS NOT NULL THEN 0
-                ELSE -1 END;
-            """, connection);
-        var schemaShape = Convert.ToInt32(await shape.ExecuteScalarAsync());
-        if (schemaShape < 0)
-            throw new InvalidOperationException("Schema không tương thích. Hãy chạy Database.sql hoặc dùng đúng phiên bản ứng dụng.");
-        var versionSql = schemaShape switch
-        {
-            2 => "SELECT MAX(PhienBan) FROM dbo.PhienBanCSDL",
-            1 => "SELECT MAX(Version) FROM dbo.PhienBanCSDL",
-            _ => "SELECT MAX(Version) FROM dbo.SchemaVersion"
-        };
-        await using var check = new SqlCommand(versionSql, connection);
-        var version = Convert.ToInt32(await check.ExecuteScalarAsync());
-        if (version is <1 or >16) throw new InvalidOperationException("Schema không tương thích. Hãy chạy Database.sql hoặc dùng đúng phiên bản ứng dụng.");
-        if (version == 16) return;
 
+        var coreTables = "'Phong','KhachHang','TaiKhoanNhanVien','LuotLuuTru','HoaDon','CaTruc','GiaoDichThanhToan'";
+        await using (var schemaCheck = new SqlCommand($"SELECT COUNT(*), SUM(CASE WHEN name IN ({coreTables}) THEN 1 ELSE 0 END) FROM sys.tables WHERE schema_id=SCHEMA_ID('dbo') AND name<>N'sysdiagrams'", connection))
+        {
+            await using var rows = await schemaCheck.ExecuteReaderAsync();
+            await rows.ReadAsync();
+            var total = rows.GetInt32(0);
+            var core = rows.IsDBNull(1) ? 0 : rows.GetInt32(1);
+            if (total == 7 && core == 7)
+            {
+                await rows.DisposeAsync();
+                await using var permissionColumn = new SqlCommand("IF COL_LENGTH(N'dbo.TaiKhoanNhanVien',N'QuyenChucNang') IS NULL ALTER TABLE dbo.TaiKhoanNhanVien ADD QuyenChucNang nvarchar(max) NULL", connection);
+                await permissionColumn.ExecuteNonQueryAsync();
+                return;
+            }
+            if (total != 0) throw new InvalidOperationException($"CSDL hiện có {total} bảng. Hãy sao lưu và chạy quy trình chuyển đổi 7 bảng trước khi mở ứng dụng.");
+        }
         using var stream = typeof(SchemaMigrator).Assembly.GetManifestResourceStream("QLKhachSan.Database.sql")
-            ?? throw new InvalidOperationException("Thiếu Database.sql trong ứng dụng.");
+            ?? throw new InvalidOperationException("Không tìm thấy script khởi tạo CSDL.");
         using var reader = new StreamReader(stream);
-        var source = await reader.ReadToEndAsync();
-        await using var legacyCheck = new SqlCommand(
-            "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaVersion', N'U') IS NULL THEN 0 ELSE 1 END", connection);
-        if (Convert.ToInt32(await legacyCheck.ExecuteScalarAsync()) == 1)
+        var script = await reader.ReadToEndAsync();
+        var start = script.IndexOf("SET NOCOUNT ON;", StringComparison.OrdinalIgnoreCase);
+        if (start < 0) throw new InvalidOperationException("Script CSDL không hợp lệ.");
+        foreach (var batch in Regex.Split(script[start..], @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
         {
-            var bridge = Regex.Match(source,
-                @"(?ms)^-- BEGIN LEGACY TABLE RENAME[ \t]*\r?\n(?<sql>.*?)^-- END LEGACY TABLE RENAME[ \t]*\r?$");
-            if (!bridge.Success)
-                throw new InvalidOperationException("Database.sql thiếu bước đổi tên bảng cũ.");
-            await using var rename = new SqlCommand(bridge.Groups["sql"].Value.Trim(), connection)
-                { CommandTimeout = 60 };
-            try { await rename.ExecuteNonQueryAsync(); }
-            catch (SqlException ex) { throw new SchemaMigrationException(9, ex); }
-        }
-        if (schemaShape != 2)
-        {
-            var bridge = Regex.Match(source,
-                @"(?ms)^-- BEGIN LEGACY COLUMN RENAME[ \t]*\r?\n(?<sql>.*?)^-- END LEGACY COLUMN RENAME[ \t]*\r?$");
-            if (!bridge.Success)
-                throw new InvalidOperationException("Database.sql thiếu bước đổi tên cột cũ.");
-            await using var rename = new SqlCommand(bridge.Groups["sql"].Value.Trim(), connection)
-                { CommandTimeout = 120 };
-            try { await rename.ExecuteNonQueryAsync(); }
-            catch (SqlException ex) { throw new SchemaMigrationException(10, ex); }
-        }
-        var sections = Regex.Matches(source,
-            @"(?ms)^-- BEGIN MIGRATION V(?<version>[2-9]|10|11|12|13|14|15|16)[ \t]*\r?\n(?<sql>.*?)^-- END MIGRATION V\k<version>[ \t]*\r?$");
-        var migrations = sections.Cast<Match>().ToDictionary(
-            match => int.Parse(match.Groups["version"].Value),
-            match => match.Groups["sql"].Value.Trim());
-        if (sections.Count != 15 || Enumerable.Range(2,15).Any(next => !migrations.ContainsKey(next)))
-            throw new InvalidOperationException("Database.sql thiếu một bước nâng cấp từ V2 đến V16.");
-
-        foreach(var next in Enumerable.Range(version+1,16-version))
-        {
-            await using var command = new SqlCommand(migrations[next], connection) { CommandTimeout = 60 };
-            try { await command.ExecuteNonQueryAsync(); }
-            catch (SqlException ex) { throw new SchemaMigrationException(next, ex); }
+            if (string.IsNullOrWhiteSpace(batch)) continue;
+            await using var command = new SqlCommand(batch, connection) { CommandTimeout = 120 };
+            await command.ExecuteNonQueryAsync();
         }
     }
 }

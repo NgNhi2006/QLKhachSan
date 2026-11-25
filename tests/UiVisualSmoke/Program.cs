@@ -6,6 +6,313 @@ using QLKhachSan.DTO;
 using QLKhachSan.GUI;
 using QLKhachSan.DAL;
 
+if(args.Length==2 && args[0]=="--staff-screen-smoke")
+{
+    Environment.SetEnvironmentVariable("QLKHACHSAN_CONNECTION_STRING",args[1]);
+    Application.EnableVisualStyles();
+    using var connection=new SqlConnection(args[1]);
+    connection.Open();
+    using var command=new SqlCommand("SELECT TOP(1) Ma,TenDangNhap,PhienBanBaoMat FROM dbo.TaiKhoanNhanVien WHERE VaiTro='Admin' AND DangHoatDong=1 AND DaLuuTru=0 ORDER BY Ma",connection);
+    using var reader=command.ExecuteReader();
+    if(!reader.Read())throw new InvalidOperationException("Không có Admin đang hoạt động để kiểm tra giao diện.");
+    var actor=new UserSession(reader.GetInt32(0),reader.GetString(1),"Admin")
+    {
+        SecurityVersion=reader.GetInt64(2),GrantedFunctions=FunctionPolicy.Defaults("Admin")
+    };
+    reader.Close();
+    using var smokeForm=new FormMain(actor);
+    var smokeDashboard=smokeForm.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(smokeDashboard,true);
+    smokeForm.Show();
+    var method=typeof(ucDashboard).GetMethod("ShowAccounts",BindingFlags.Instance|BindingFlags.NonPublic)!;
+    var opened=false;
+    using var watcher=new System.Windows.Forms.Timer {Interval=100};
+    watcher.Tick+=(_,_)=>
+    {
+        var accountForm=Application.OpenForms.Cast<Form>().FirstOrDefault(x=>x.Text=="Nhân viên & phân quyền");
+        if(accountForm is not null && accountForm.Visible)
+        {
+            bool HasButton(Control parent,string caption) => parent.Controls.Cast<Control>().Any(c=>c is Button b && b.Text==caption || HasButton(c,caption));
+            if(!HasButton(accountForm,"+ TẠO TÀI KHOẢN") || !HasButton(accountForm,"ĐỔI MẬT KHẨU") || !HasButton(accountForm,"PHÂN QUYỀN"))
+                throw new InvalidOperationException("Màn nhân viên thiếu thao tác được yêu cầu.");
+            opened=true;
+            accountForm.Close();
+        }
+    };
+    watcher.Start();
+    var task=(Task)method.Invoke(smokeDashboard,[])!;
+    var deadline=DateTime.UtcNow.AddSeconds(10);
+    while(DateTime.UtcNow<deadline && !task.IsCompleted){Application.DoEvents();Thread.Sleep(20);}
+    watcher.Stop();
+    task.GetAwaiter().GetResult();
+    if(!opened)throw new TimeoutException("Màn nhân viên không mở được trong 10 giây.");
+    Console.WriteLine("STAFF_SCREEN_OK");
+    smokeForm.Close();
+    return;
+}
+
+if(args.Length==2 && args[0]=="--login-preview")
+{
+    Directory.CreateDirectory(args[1]);
+    var thread = new Thread(() =>
+    {
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        using var login = new FormLogin();
+        login.Show();
+        Application.DoEvents();
+        using var bitmap = new Bitmap(login.Width, login.Height);
+        login.DrawToBitmap(bitmap, new Rectangle(Point.Empty, login.Size));
+        var path = Path.Combine(args[1], "real_form_login.png");
+        bitmap.Save(path, ImageFormat.Png);
+        Console.WriteLine(path);
+        login.Close();
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+    return;
+}
+if(args.Length==2 && args[0]=="--room-overview-preview")
+{
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+    Directory.CreateDirectory(args[1]);
+    var previewUser=new UserSession(1,"admin","Admin") {DisplayName="Nguyễn Ngọc Thuần Nhi",GrantedFunctions=FunctionPolicy.Defaults("Admin")};
+    using var preview=new FormMain(previewUser);
+    var roomDash=preview.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(roomDash,true);
+    var rooms=new List<Room>
+    {
+        new(101,"101","Standard",350000,0,RoomStatus.Trong,1),
+        new(102,"102","Standard",350000,0,RoomStatus.DangO,1),
+        new(103,"103","Deluxe",550000,0,RoomStatus.DangDon,1),
+        new(201,"201","Deluxe",550000,0,RoomStatus.Trong,2),
+        new(202,"202","VIP",950000,0,RoomStatus.DangO,2),
+        new(203,"203","VIP",950000,0,RoomStatus.BaoTri,2),
+        new(301,"301","Suite",1500000,0,RoomStatus.DangO,3),
+        new(302,"302","Suite",1500000,0,RoomStatus.Trong,3),
+    };
+    var stays=new List<Stay>
+    {
+        new(1,102,1,"Lê Quốc Vượng","0912345678","001200001234",StayStatus.Occupied,DateTime.Today,DateTime.Today,DateTime.Today.AddDays(2),DateTime.Today,null,0,1),
+        new(2,202,2,"Hoàng Anh Ngọc","0987654321","001200005678",StayStatus.Occupied,DateTime.Today.AddDays(-1),DateTime.Today.AddDays(-1),DateTime.Today.AddDays(1),DateTime.Today.AddDays(-1),null,500000,1),
+        new(3,301,3,"Nguyễn Thị Thu Hà","0905111222","001200009999",StayStatus.Occupied,DateTime.Today,DateTime.Today,DateTime.Today.AddDays(3),DateTime.Today,null,1000000,1)
+    };
+    typeof(ucDashboard).GetField("data",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .SetValue(roomDash,new DashboardData(rooms,stays,[],[],[]));
+    preview.Show();
+    preview.SetBounds(0,0,1366,768);
+    Application.DoEvents();
+    typeof(ucDashboard).GetMethod("RenderRooms",BindingFlags.Instance|BindingFlags.NonPublic)?.Invoke(roomDash,null);
+    Application.DoEvents();
+    using var bitmap=new Bitmap(preview.Width,preview.Height);
+    preview.DrawToBitmap(bitmap,new Rectangle(Point.Empty,preview.Size));
+    var path=Path.Combine(args[1],"room-overview.png");
+    bitmap.Save(path,ImageFormat.Png);
+    Console.WriteLine(path);
+    preview.Close();
+    return;
+}
+
+if(args.Length==2 && (args[0] is "--bill-editor-preview" or "--bill-editor-behavior"))
+{
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+    Directory.CreateDirectory(args[1]);
+    var previewUser=new UserSession(1,"admin","Admin") {GrantedFunctions=FunctionPolicy.Defaults("Admin")};
+    using var preview=new FormMain(previewUser);
+    var billEditorDashboard=preview.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(billEditorDashboard,true);
+    var room=new Room(205,"205","Deluxe",1200000,500000,RoomStatus.DangO,1);
+    var stay=new Stay(42,205,12,"Nguyễn Thị Mai Anh","0903123456","012345678901",StayStatus.Occupied,
+        DateTime.Today.AddDays(-2),DateTime.Today.AddDays(-2),DateTime.Today.AddDays(1),
+        DateTime.Today.AddDays(-2),null,500000,1);
+    var lines=new List<ServiceLine>
+    {
+        new(1,42,"Minibar","Nước suối",2,30000,DateTime.Now.AddDays(-1),DateTime.Now.AddDays(-1),2),
+        new(2,42,"Dịch vụ","Bữa sáng",2,150000,DateTime.Now,DateTime.Now,2)
+    };
+    var bill=new BillQuote(stay,room,DateTime.Now,2400000,360000,lines);
+    typeof(ucDashboard).GetField("data",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(billEditorDashboard,
+        new DashboardData([],[],[],[new ServiceItem(3,"Giặt ủi","Giặt áo",20000,"áo")],[]));
+    preview.Show();
+    using var timer=new System.Windows.Forms.Timer {Interval=350};
+    timer.Tick+=(_,_)=>
+    {
+        timer.Stop();
+        var editor=Application.OpenForms.Cast<Form>().Single(f=>f.Text.StartsWith("Xem / sửa bill tạm tính"));
+        if(args[0]=="--bill-editor-preview")
+        {
+            using var bitmap=new Bitmap(editor.Width,editor.Height);
+            editor.DrawToBitmap(bitmap,new Rectangle(Point.Empty,editor.Size));
+            var path=Path.Combine(args[1],"bill-editor.png");bitmap.Save(path,ImageFormat.Png);
+            Console.WriteLine(path);editor.Close();return;
+        }
+        IEnumerable<Control> Children(Control parent)
+        {
+            foreach(Control child in parent.Controls)
+            {
+                yield return child;
+                foreach(var nested in Children(child))yield return nested;
+            }
+        }
+        var controls=Children(editor).ToArray();
+        var grid=controls.OfType<DataGridView>().Single();
+        var buttons=controls.OfType<Button>().ToArray();
+        grid.CurrentCell=grid.Rows[1].Cells["Name"];
+        buttons.Single(x=>x.Text=="Xóa dòng").PerformClick();
+        using var pickerTimer=new System.Windows.Forms.Timer {Interval=140};
+        pickerTimer.Tick+=(_,_)=>
+        {
+            pickerTimer.Stop();
+            var picker=Application.OpenForms.Cast<Form>().Single(f=>f.Text=="Chọn dịch vụ");
+            var pickerControls=Children(picker).ToArray();
+            pickerControls.OfType<NumericUpDown>().Single().Value=2;
+            pickerControls.OfType<Button>().Single(x=>x.Text=="THÊM VÀO BILL").PerformClick();
+        };
+        pickerTimer.Start();
+        buttons.Single(x=>x.Text.Contains("Thêm dịch vụ")).PerformClick();
+        buttons.Single(x=>x.Text=="LƯU BILL TẠM TÍNH").PerformClick();
+    };
+    timer.Start();
+    var edited=typeof(ucDashboard).GetMethod("EditDraftBill",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .Invoke(billEditorDashboard,[bill,"Tiền mặt","",preview]) as BillQuote;
+    if(args[0]=="--bill-editor-behavior")
+    {
+        if(edited?.Services!=340000 || edited.DraftLines?.Count!=3 ||
+           edited.DraftLines[2].Total!=40000 || edited.DraftLines[2].ServiceId!=3)
+            throw new InvalidOperationException("Bill editor catalog add or delete failed.");
+        Console.WriteLine("Bill editor catalog add/delete: OK");
+    }
+    preview.Close();return;
+}
+
+if(args.Length==2 && args[0]=="--stay-picker-preview")
+{
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+    Directory.CreateDirectory(args[1]);
+    var previewUser=new UserSession(1,"admin","Admin") {GrantedFunctions=FunctionPolicy.Defaults("Admin")};
+    using var preview=new FormMain(previewUser);
+    var stayPickerDashboard=preview.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(stayPickerDashboard,true);
+    var stay=new Stay(42,101,12,"Nguyễn Thị Mai Anh","0967235473","012345678901",
+        StayStatus.Occupied,DateTime.Now.AddDays(-1),DateTime.Now.AddDays(-1),DateTime.Now.AddDays(1),
+        DateTime.Now.AddDays(-1),null,0,1);
+    var room=new Room(101,"101","Deluxe",500000,0,RoomStatus.DangO,1,"P-A9F02C71B4D812E0");
+    typeof(ucDashboard).GetField("data",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .SetValue(stayPickerDashboard,new DashboardData([room],[stay],[],[],[]));
+    preview.Show();
+    using var timer=new System.Windows.Forms.Timer {Interval=350};
+    timer.Tick+=(_,_)=>
+    {
+        timer.Stop();
+        var picker=Application.OpenForms.Cast<Form>().Single(f=>f.Text=="Chọn lượt để xử lý dịch vụ");
+        using var bitmap=new Bitmap(picker.Width,picker.Height);
+        picker.DrawToBitmap(bitmap,new Rectangle(Point.Empty,picker.Size));
+        var path=Path.Combine(args[1],"stay-picker.png");bitmap.Save(path,ImageFormat.Png);
+        Console.WriteLine(path);
+        picker.Close();
+    };
+    timer.Start();
+    typeof(ucDashboard).GetMethod("SelectStay",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .Invoke(stayPickerDashboard,["Chọn lượt để xử lý dịch vụ"]);
+    preview.Close();return;
+}
+
+if(args.Length==2 && args[0]=="--account-workspace-preview")
+{
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+    Directory.CreateDirectory(args[1]);
+    var previewUser=new UserSession(1,"admin","Admin")
+    {DisplayName="Nguyễn Văn A",GrantedFunctions=FunctionPolicy.Defaults("Admin")};
+    using var preview=new FormMain(previewUser);
+    var accountDashboard=preview.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .SetValue(accountDashboard,true);
+    preview.Show();preview.WindowState=FormWindowState.Normal;
+    foreach(var (width,height) in new[]{(1100,700),(1366,768),(1920,1080)})
+    {
+        preview.SetBounds(0,0,width,height);
+        var profile=new UserInfo(1,"admin","Admin",true,null,1,"Nguyễn Văn A",null);
+        typeof(ucDashboard).GetMethod("BuildMyAccountWorkspace",BindingFlags.Instance|BindingFlags.NonPublic)!
+            .Invoke(accountDashboard,[profile]);
+        Application.DoEvents();
+        using var bitmap=new Bitmap(preview.Width,preview.Height);
+        preview.DrawToBitmap(bitmap,new Rectangle(Point.Empty,preview.Size));
+        var path=Path.Combine(args[1],$"account-{width}x{height}.png");
+        bitmap.Save(path,ImageFormat.Png);Console.WriteLine(path);
+    }
+    preview.Close();return;
+}
+
+if(args.Length==2 && args[0]=="--checkout-workspace-preview")
+{
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+    Directory.CreateDirectory(args[1]);
+    var previewUser=new UserSession(1,"admin","Admin") {GrantedFunctions=FunctionPolicy.Defaults("Admin")};
+    using var preview=new FormMain(previewUser);
+    var checkoutDashboard=preview.Controls.OfType<ucDashboard>().Single();
+    typeof(ucDashboard).GetField("loaded",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .SetValue(checkoutDashboard,true);
+    var room=new Room(205,"205","Deluxe",1200000,500000,RoomStatus.DangO,1);
+    var stay=new Stay(42,205,12,"Nguyễn Thị Mai Anh","0903123456","012345678901",StayStatus.Occupied,
+        DateTime.Today.AddDays(-2),DateTime.Today.AddDays(-2),DateTime.Today.AddDays(1),
+        DateTime.Today.AddDays(-2),null,500000,1);
+    var lines=new List<ServiceLine>
+    {
+        new(1,42,"Minibar","Nước suối",2,30000,DateTime.Now.AddDays(-1),DateTime.Now.AddDays(-1),2),
+        new(2,42,"Dịch vụ","Bữa sáng",2,150000,DateTime.Now,DateTime.Now,2)
+    };
+    var bill=new BillQuote(stay,room,DateTime.Now,2400000,360000,lines);
+    typeof(ucDashboard).GetField("data",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .SetValue(checkoutDashboard,new DashboardData([room],[stay],[],[],[]));
+    preview.Show();preview.WindowState=FormWindowState.Normal;
+    preview.SetBounds(0,0,1366,768);
+    typeof(ucDashboard).GetMethod("ShowCheckoutWorkspace",BindingFlags.Instance|BindingFlags.NonPublic)!
+        .Invoke(checkoutDashboard,[stay,bill]);
+    Application.DoEvents();
+    using var bitmap=new Bitmap(preview.Width,preview.Height);
+    preview.DrawToBitmap(bitmap,new Rectangle(Point.Empty,preview.Size));
+    var path=Path.Combine(args[1],"checkout-workspace-1366x768.png");
+    bitmap.Save(path,ImageFormat.Png);Console.WriteLine(path);
+    IEnumerable<Control> Children(Control parent)
+    {
+        foreach(Control child in parent.Controls)
+        {
+            yield return child;
+            foreach(var nested in Children(child))yield return nested;
+        }
+    }
+    var all=Children(checkoutDashboard).ToArray();
+    var previewBill=all.OfType<Button>().Single(x=>x.Text=="XEM / SỬA BILL TẠM TÍNH");
+    var totalPanel=previewBill.Parent!.Controls.OfType<Panel>()
+        .Single(x=>x.BackColor==Color.FromArgb(249,247,242));
+    if(previewBill.Top<totalPanel.Bottom)
+        throw new InvalidOperationException("Bill editor overlaps invoice totals.");
+    var transfer=all.OfType<RadioButton>().Single(x=>x.Text=="Chuyển khoản");
+    transfer.Checked=true;Application.DoEvents();
+    var qrPreview=all.OfType<PictureBox>().Single(x=>x.Width>=200 && x.Height>=200);
+    if(qrPreview.Width<200 || qrPreview.Height<200)
+        throw new InvalidOperationException("Transfer QR is too small.");
+    var statusLabel=all.OfType<Label>().Single(x=>x.Text.StartsWith("Đang tải mã QR") || x.Text.StartsWith("Không tải được mã QR"));
+    var qrDeadline=DateTime.UtcNow.AddSeconds(5);
+    while(statusLabel.Visible && statusLabel.Text=="Đang tải mã QR..." && DateTime.UtcNow<qrDeadline)
+    {
+        Application.DoEvents();Thread.Sleep(50);
+    }
+    Console.WriteLine($"QR preview loaded: {qrPreview.Image is not null}; image: {qrPreview.Image?.Width}x{qrPreview.Image?.Height}; box: {qrPreview.Width}x{qrPreview.Height}");
+    Console.WriteLine($"QR visible: {qrPreview.Visible}; status visible: {statusLabel.Visible}; status: {statusLabel.Text}");
+    using var transferBitmap=new Bitmap(preview.Width,preview.Height);
+    preview.DrawToBitmap(transferBitmap,new Rectangle(Point.Empty,preview.Size));
+    var transferPath=Path.Combine(args[1],"checkout-transfer-1366x768.png");
+    transferBitmap.Save(transferPath,ImageFormat.Png);Console.WriteLine(transferPath);
+    preview.Close();return;
+}
+
 if(args.Length==2 && args[0]=="--payment-preview")
 {
     Application.EnableVisualStyles();

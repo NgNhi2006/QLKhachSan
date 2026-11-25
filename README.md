@@ -1,4 +1,14 @@
-# QLKhachSan — quản lý khách sạn (phiên bản dữ liệu 11)
+# QLKhachSan — quản lý khách sạn (CSDL 7 bảng)
+
+> Phạm vi hiện hành là 7 bảng: `Phong`, `KhachHang`, `TaiKhoanNhanVien`,
+> `LuotLuuTru`, `HoaDon`, `CaTruc`, `GiaoDichThanhToan`. Các mô tả V26/20 bảng
+> phía dưới là tài liệu lịch sử và có thể không còn đúng. Ứng dụng chỉ tự khởi tạo
+> database trống; chuyển đổi database có dữ liệu cần sao lưu rồi chạy quy trình
+> chuyển đổi riêng vì các bảng ngoài phạm vi sẽ bị xóa.
+
+> Bản đang phát triển dùng CSDL gọn V26 với 20 bảng ứng dụng. Các phần kế toán,
+> hóa đơn và menu mở rộng mô tả bên dưới là tài liệu lịch sử; xem
+> [phạm vi V26](docs/CORE20.md) trước khi nâng cấp CSDL đang dùng.
 
 Ứng dụng WinForms .NET 10, SQL Server Express, phân tầng GUI / BLL / DAL / DTO.
 
@@ -21,7 +31,7 @@
 - Mở `QLKhachSan.slnx`, chọn `QLKhachSan` làm startup project và F5; hoặc `dotnet run --project QLKhachSan`.
 - Cần .NET SDK 10 để build; bản publish cần .NET Desktop Runtime 10.
 - Kết nối mặc định: `.\SQLEXPRESS`, database `QLKhachSanApp`, Windows Authentication.
-- Máy mới: chạy duy nhất [`Database/Database.sql`](Database/Database.sql) trong SSMS để tạo CSDL hoàn chỉnh đến V15. Máy đang dùng bản V1–V14 có thể chạy lại file này hoặc để ứng dụng tự đọc các phần nâng cấp còn thiếu từ cùng file.
+- Máy mới: ứng dụng tự tạo 7 bảng trên database trống, hoặc chạy [`Database/Database.sql`](Database/Database.sql) trong SSMS. Với database có dữ liệu, sao lưu và kiểm tra bản sao lưu trước khi chuyển đổi; ứng dụng không tự xóa bảng cũ.
 - File SQL chạy trong SSMS thông thường, không cần SQLCMD mode. Các phần nâng cấp dùng transaction, khóa và có thể chạy lại.
 - Nếu chạy bằng `sqlcmd`, dùng `-f 65001` để giữ nguyên tên menu và chuỗi tiếng Việt UTF-8.
 - Khi nâng cấp: đóng tất cả phiên ứng dụng cũ, sao lưu database và kiểm tra khôi phục trước. Bản cũ không tương thích với schema mới.

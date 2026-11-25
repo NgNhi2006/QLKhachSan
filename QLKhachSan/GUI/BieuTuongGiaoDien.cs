@@ -22,6 +22,14 @@ internal static class UiIcons
         void Box(float x,float y,float w,float h)=>g.DrawRectangle(pen,x,y,w,h);
         switch(kind)
         {
+            case "plus":
+                Line(10,3,10,17);Line(3,10,17,10);break;
+            case "pencil":
+                Line(4,15,14,5);Line(7,17,17,7);Line(14,5,17,7);
+                Line(4,15,3,18);Line(3,18,7,17);break;
+            case "trash":
+                Box(5,6,10,12);Line(3,5,17,5);Line(8,3,12,3);
+                Line(8,9,8,15);Line(12,9,12,15);break;
             case "bed":
                 Box(2,8,16,7);Line(2,15,2,18);Line(18,15,18,18);Line(4,8,4,5);Line(4,5,16,5);Line(16,5,16,8);Line(9,8,9,13);break;
             case "calendar":
@@ -76,6 +84,8 @@ internal static class UiIcons
                 Line(10,3,3,3);Line(3,3,3,17);Line(3,17,10,17);Line(9,10,18,10);Line(14,6,18,10);Line(18,10,14,14);break;
             case "refresh":
                 g.DrawArc(pen,3,3,14,14,55,290);Line(16,3,17,8);Line(17,8,12,7);break;
+            case "close":
+                Line(4,4,16,16);Line(16,4,4,16);break;
             default:
                 Box(4,3,12,14);Line(7,7,13,7);Line(7,11,13,11);break;
         }

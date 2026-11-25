@@ -5,3 +5,5 @@
 artifacts/
 review-backup/
 _DbBackup/
+**/.build-check/
+.verify-build/

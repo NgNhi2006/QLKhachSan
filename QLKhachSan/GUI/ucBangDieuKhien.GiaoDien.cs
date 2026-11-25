@@ -16,64 +16,90 @@ public partial class ucDashboard
     private void ApplyAppearance()
     {
         SuspendLayout();Font=AppTheme.Body;BackColor=AppTheme.Canvas;
-        pnlHeader.Height=88;pnlHeader.BackColor=AppTheme.Navy;
-        pnlHeader.Controls.Add(new DashboardLogo {Location=new Point(22,22)});
+        pnlHeader.Height=78;pnlHeader.BackColor=Color.White;
+        var brand=new Panel {Dock=DockStyle.Left,Width=242,BackColor=AppTheme.Navy};
+        pnlHeader.Controls.Add(brand);brand.BringToFront();
+        brand.Controls.Add(new DashboardLogo {Location=new Point(18,18)});
         pnlHeader.Paint+=(_,e)=>{using var edge=new Pen(AppTheme.Border);e.Graphics.DrawLine(edge,0,pnlHeader.Height-1,pnlHeader.Width,pnlHeader.Height-1);};
-        lblHeaderTitle.Font=AppTheme.TextFont(19F,FontStyle.Bold);lblHeaderTitle.ForeColor=Color.White;
+        lblHeaderTitle.Font=AppTheme.TextFont(13F,FontStyle.Bold);lblHeaderTitle.ForeColor=Color.White;
         lblHeaderTitle.UseMnemonic=false;
-        lblHeaderTitle.AutoSize=false;lblHeaderTitle.AutoEllipsis=true;lblHeaderTitle.Location=new Point(80,10);lblHeaderTitle.Height=46;
+        lblHeaderTitle.AutoSize=false;lblHeaderTitle.AutoEllipsis=true;lblHeaderTitle.Location=new Point(73,11);lblHeaderTitle.Size=new Size(169,35);
         lblHeaderTitle.TextAlign=ContentAlignment.MiddleLeft;
-        lblHeaderSubtitle.Text=$"{user.Username}  •  {RolePolicy.Name(user.Role)}";
-        lblHeaderSubtitle.Font=AppTheme.Small;lblHeaderSubtitle.ForeColor=Color.FromArgb(218,228,233);
-        lblHeaderSubtitle.AutoSize=false;lblHeaderSubtitle.Location=new Point(82,59);lblHeaderSubtitle.Height=20;
-        pnlHeader.Controls.Add(lblHeaderSubtitle);
-        void SizeHeaderText(){var width=Math.Max(230,pnlHeader.ClientSize.Width-flpHeaderRight.Width-104);lblHeaderTitle.Width=width;lblHeaderSubtitle.Width=width;}
-        pnlHeader.Resize+=(_,_)=>SizeHeaderText();SizeHeaderText();
-        flpHeaderRight.AutoSize=false;flpHeaderRight.Width=720;
-        flpHeaderRight.Padding=new Padding(0,20,20,0);
-        lblClock.AutoSize=false;lblClock.Size=new Size(150,44);
+        lblHeaderSubtitle.Text="QUẢN LÝ KHÁCH SẠN";
+        lblHeaderSubtitle.Font=AppTheme.TextFont(8F);lblHeaderSubtitle.ForeColor=Color.FromArgb(224,232,222);
+        lblHeaderSubtitle.AutoSize=false;lblHeaderSubtitle.Location=new Point(74,45);lblHeaderSubtitle.Size=new Size(160,20);
+        pnlHeader.Controls.Remove(lblHeaderTitle);brand.Controls.Add(lblHeaderTitle);brand.Controls.Add(lblHeaderSubtitle);
+        flpHeaderRight.AutoSize=false;flpHeaderRight.Width=612;
+        flpHeaderRight.Padding=new Padding(0,14,20,0);
+        lblClock.AutoSize=false;lblClock.Size=new Size(105,50);
         lblClock.TextAlign=ContentAlignment.MiddleCenter;
-        lblClock.ForeColor=Color.FromArgb(190,207,224);lblClock.Font=AppTheme.Small;
-        lblClock.Margin=new Padding(0,0,12,0);
+        lblClock.ForeColor=AppTheme.Muted;lblClock.Font=AppTheme.Small;
+        lblClock.Margin=new Padding(0,0,7,0);
         btnRefresh.Text="Làm mới";btnDangXuat.Text="Đăng xuất";AppTheme.Button(btnRefresh,true);AppTheme.Button(btnDangXuat);
-        btnRefresh.BackColor=Color.FromArgb(31,53,86);btnRefresh.ForeColor=Color.White;
-        btnDangXuat.BackColor=AppTheme.Navy;btnDangXuat.ForeColor=Color.White;
-        btnDangXuat.FlatAppearance.BorderColor=Color.FromArgb(112,139,153);
-        btnRefresh.Size=new Size(112,44);btnDangXuat.Size=new Size(124,44);
-        btnRefresh.Margin=new Padding(0,0,10,0);btnDangXuat.Margin=Padding.Empty;
+        btnRefresh.BackColor=Color.FromArgb(239,246,240);btnRefresh.ForeColor=AppTheme.Blue;
+        btnDangXuat.BackColor=Color.FromArgb(250,249,246);btnDangXuat.ForeColor=AppTheme.Ink;
+        btnRefresh.Size=new Size(108,50);btnDangXuat.Size=new Size(120,50);
+        btnRefresh.Margin=new Padding(0,0,8,0);btnDangXuat.Margin=Padding.Empty;
         btnRefresh.Image=null;btnDangXuat.Image=null;
         btnRefresh.TextAlign=ContentAlignment.MiddleCenter;
         btnDangXuat.TextAlign=ContentAlignment.MiddleCenter;
         btnRefresh.Padding=Padding.Empty;btnDangXuat.Padding=Padding.Empty;
-        var account=new Panel {Size=new Size(245,44),BackColor=Color.FromArgb(31,53,86),
-            Margin=new Padding(0,0,10,0),Cursor=Cursors.Hand};
-        account.Paint+=(_,e)=>
+        void RoundHeaderButton(Button button,Color fill,Color ink,bool leftAligned=false)
         {
-            using var line=new Pen(Color.FromArgb(69,97,133));
-            e.Graphics.DrawRectangle(line,0,0,account.Width-1,account.Height-1);
-        };
-        headerAvatar=new AvatarBadge {Location=new Point(8,6),Size=new Size(32,32),Cursor=Cursors.Hand};
-        headerAccountName=new Label {Location=new Point(46,4),Size=new Size(190,20),
-            Font=AppTheme.Bold,ForeColor=Color.White,AutoEllipsis=true,Cursor=Cursors.Hand};
-        headerAccountRole=new Label {Location=new Point(46,23),
-            Size=new Size(190,18),Font=AppTheme.Small,ForeColor=Color.FromArgb(190,207,224),
-            AutoEllipsis=true,Cursor=Cursors.Hand};
-        account.Controls.Add(headerAvatar);account.Controls.Add(headerAccountName);account.Controls.Add(headerAccountRole);
+            button.FlatAppearance.BorderSize=0;
+            button.FlatAppearance.MouseOverBackColor=fill;
+            button.FlatAppearance.MouseDownBackColor=fill;
+            button.Paint+=(_,e)=>
+            {
+                var g=e.Graphics;
+                g.Clear(pnlHeader.BackColor);
+                g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var rounded=AppTheme.Rounded(new RectangleF(1,1,button.Width-3,button.Height-3),16);
+                using var brush=new SolidBrush(fill);
+                using var border=new Pen(AppTheme.Border);
+                g.FillPath(brush,rounded);g.DrawPath(border,rounded);
+                TextRenderer.DrawText(g,button.Text,button.Font,
+                    new Rectangle(leftAligned?16:8,2,button.Width-(leftAligned?32:16),button.Height-4),ink,
+                    (leftAligned?TextFormatFlags.Left:TextFormatFlags.HorizontalCenter)|
+                    TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix);
+            };
+        }
+        RoundHeaderButton(btnRefresh,Color.FromArgb(239,246,240),AppTheme.Blue);
+        RoundHeaderButton(btnDangXuat,Color.FromArgb(250,249,246),AppTheme.Ink);
+        var account=new HeaderAccountCard {Size=new Size(236,50),Margin=new Padding(0,0,8,0)};
+        headerAvatar=new AvatarBadge {Location=new Point(5,3),Size=new Size(44,44),Cursor=Cursors.Hand};
+        headerAccountName=new Label {Location=new Point(58,13),Size=new Size(151,24),
+            Font=AppTheme.Bold,ForeColor=AppTheme.Ink,AutoEllipsis=true,Cursor=Cursors.Hand};
+        headerAccountRole=new Label {Visible=false};
+        var accountChevron=new Label {Text="⌄",Font=AppTheme.Bold,ForeColor=AppTheme.Muted,
+            Location=new Point(213,13),Size=new Size(16,24),TextAlign=ContentAlignment.MiddleCenter,Cursor=Cursors.Hand};
+        account.Controls.Add(headerAvatar);account.Controls.Add(headerAccountName);
+        account.Controls.Add(headerAccountRole);account.Controls.Add(accountChevron);
         var accountMenu=new ContextMenuStrip {Font=AppTheme.Body,BackColor=Color.White,ForeColor=AppTheme.Ink};
         headerProfileItem=new ToolStripMenuItem {Enabled=false};
         accountMenu.Items.Add(headerProfileItem);
         accountMenu.Items.Add(new ToolStripSeparator());
-        accountMenu.Items.Add(new ToolStripMenuItem("Chỉnh sửa hồ sơ",null,async (_,_)=>await Run(ShowAccounts)));
+        accountMenu.Items.Add(new ToolStripMenuItem("Tài khoản của tôi",null,async (_,_)=>await Run(ShowMyAccountWorkspace)));
+        if(FunctionPolicy.Can(user,"staff.manage"))
+            accountMenu.Items.Add(new ToolStripMenuItem("Nhân viên & phân quyền",null,async (_,_)=>await Run(ShowAccounts)));
         accountMenu.Items.Add(new ToolStripMenuItem("Đăng xuất",null,(_,_)=>btnDangXuat.PerformClick()));
         account.ContextMenuStrip=accountMenu;
         account.Disposed+=(_,_)=>accountMenu.Dispose();
-        void OpenAccount(object? _,EventArgs __)=>accountMenu.Show(account,new Point(0,account.Height));
+        async void OpenAccount(object? _,EventArgs __)=>await Run(ShowMyAccountWorkspace);
         account.Click+=OpenAccount;headerAvatar.Click+=OpenAccount;
         headerAccountName.Click+=OpenAccount;headerAccountRole.Click+=OpenAccount;
+        accountChevron.Click+=(_,_)=>accountMenu.Show(account,new Point(0,account.Height));
         flpHeaderRight.Controls.Add(account);
         flpHeaderRight.Controls.SetChildIndex(account,2);
         UpdateHeaderAccountProfile();
-        SizeHeaderText();
+        var quickSearch=BuildGlobalSearch();
+        pnlHeader.Controls.Add(quickSearch);
+        void LayoutSearch()
+        {
+            quickSearch.Width=Math.Clamp(pnlHeader.Width-flpHeaderRight.Width-282,0,680);
+            quickSearch.Visible=quickSearch.Width>=185;
+        }
+        pnlHeader.Resize+=(_,_)=>LayoutSearch();LayoutSearch();
         tlpCards.Height=132;tlpCards.Padding=new Padding(16,14,16,10);
         var panels=new[]{pnlCard1,pnlCard2,pnlCard3,pnlCard4,pnlCard5};
         var titles=new[]{lblCard1Title,lblCard2Title,lblCard3Title,lblCard4Title,lblCard5Title};
@@ -116,7 +142,8 @@ public partial class ucDashboard
                 }
             }
         }
-        tlpBody.Padding=new Padding(16,4,16,14);tlpBody.ColumnStyles[0].Width=244;tlpBody.ColumnStyles[2].Width=226;
+        tlpBody.Padding=Padding.Empty;tlpBody.Margin=Padding.Empty;
+        tlpBody.ColumnStyles[0].Width=242;tlpBody.ColumnStyles[2].Width=226;
         pnlLeftTools.BackColor=AppTheme.Navy;pnlLeftTools.Padding=new Padding(12);pnlLeftTools.AutoScroll=true;
         pnlLeftTools.Controls.Add(new DashboardLogo {Location=new Point(14,14),Size=new Size(38,38)});
         pnlLeftTools.Controls.Add(new Label {Text="HOTEL DESK",Font=new Font("Segoe UI Semibold",12F,FontStyle.Bold),ForeColor=Color.White,BackColor=AppTheme.Navy,AutoSize=true,Location=new Point(63,20)});
@@ -138,7 +165,7 @@ public partial class ucDashboard
         tabMainView.DrawItem+=(_,e)=>
         {
             var active=e.Index==tabMainView.SelectedIndex;
-            using var brush=new SolidBrush(active?Color.White:Color.FromArgb(238,243,250));e.Graphics.FillRectangle(brush,e.Bounds);
+            using var brush=new SolidBrush(active?Color.White:Color.FromArgb(243,243,235));e.Graphics.FillRectangle(brush,e.Bounds);
             var page=tabMainView.TabPages[e.Index];
             if(tabIcons.TryGetValue(page,out var icon))e.Graphics.DrawImage(icon,e.Bounds.Left+13,e.Bounds.Top+11,17,17);
             var textBounds=new Rectangle(e.Bounds.Left+32,e.Bounds.Top,e.Bounds.Width-35,e.Bounds.Height);
@@ -192,7 +219,7 @@ public partial class ucDashboard
     {
         if(headerAccountName is null)return;
         headerAccountName.Text=$"{user.DisplayName}  ·  {user.Role}";
-        headerAccountRole!.Text=$"@{user.Username}  ▾";
+        headerAccountRole!.Text=user.Role;
         headerAvatar!.SetProfile(user.DisplayName,user.AvatarPng);
         if(headerProfileItem is not null)headerProfileItem.Text=$"{user.DisplayName}  •  {user.Role}";
     }

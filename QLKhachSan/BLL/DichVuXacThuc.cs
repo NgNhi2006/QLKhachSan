@@ -81,7 +81,6 @@ public sealed partial class AuthService(HotelRepository repository)
         await repository.RunAsync(true,async db=>
         {
             await db.RequireUserAsync(user);
-            FunctionPolicy.Require(user,"system.password");
             var account=await db.AccountAsync(user.Username) ?? throw new BusinessException("Tài khoản không tồn tại.");
             var oldHash=await Task.Run(()=>Hash(oldPassword,account.Salt,account.Iterations));
             if(!CryptographicOperations.FixedTimeEquals(oldHash,account.Hash)) throw new BusinessException("Mật khẩu hiện tại không đúng.");

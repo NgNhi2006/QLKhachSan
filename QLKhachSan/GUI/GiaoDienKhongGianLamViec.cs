@@ -20,6 +20,7 @@ internal static class WorkspaceSkin
 
     private static void Apply(Form form)
     {
+        form.Icon=AppTheme.AppIcon;
         var working=Screen.FromControl(form).WorkingArea;
         var maxWidth=Math.Max(640,working.Width-24);
         var maxHeight=Math.Max(480,working.Height-24);
@@ -52,8 +53,8 @@ internal static class WorkspaceSkin
         var top=root.GetControlFromPosition(0,0);
         if(top is Label directTitle && directTitle.Font.Size>=14)
         {
-            directTitle.BackColor=AppTheme.Navy;
-            directTitle.ForeColor=Color.White;
+            directTitle.BackColor=Color.White;
+            directTitle.ForeColor=AppTheme.Navy;
             directTitle.Padding=new Padding(Math.Max(18,directTitle.Padding.Left),directTitle.Padding.Top,8,0);
             return;
         }
@@ -62,16 +63,15 @@ internal static class WorkspaceSkin
         if(labels.Length==0)return;
         if(root.RowStyles.Count>0 && root.RowStyles[0].SizeType==SizeType.Absolute && root.RowStyles[0].Height<92)
             root.RowStyles[0].Height=92;
-        top.BackColor=AppTheme.Navy;
+        top.BackColor=Color.White;
         foreach(var label in Descendants(top).OfType<Label>())
         {
-            label.ForeColor=label.Font.Size>=14?Color.White:Color.FromArgb(222,231,236);
-            if(label.BackColor==Color.White)label.BackColor=AppTheme.Navy;
+            label.ForeColor=label.Font.Size>=14?AppTheme.Navy:AppTheme.Muted;
         }
         top.Paint+=(_,e)=>
         {
             using var accent=new SolidBrush(AppTheme.Focus);
-            e.Graphics.FillRectangle(accent,0,0,4,top.Height);
+            e.Graphics.FillRectangle(accent,18,12,42,3);
         };
         top.Invalidate();
     }
@@ -94,7 +94,7 @@ internal static class WorkspaceSkin
         {
             var selected=e.Index==tabs.SelectedIndex;
             e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
-            using var fill=new SolidBrush(selected?Color.White:Color.FromArgb(238,243,250));
+            using var fill=new SolidBrush(selected?Color.White:Color.FromArgb(243,243,235));
             e.Graphics.FillRectangle(fill,e.Bounds);
             if(selected)
             {

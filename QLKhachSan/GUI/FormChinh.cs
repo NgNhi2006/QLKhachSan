@@ -11,7 +11,7 @@ public partial class FormMain : Form
     public FormMain(UserSession user)
     {
         InitializeComponent(); WindowState=FormWindowState.Maximized;MinimumSize=new Size(1100,700);
-        BackColor=AppTheme.Canvas;Font=AppTheme.Body;Text="Quản lý khách sạn";
+        BackColor=AppTheme.Canvas;Font=AppTheme.Body;Text="Quản lý khách sạn";Icon=AppTheme.AppIcon;
         dashboard=new ucDashboard(user) { Dock=DockStyle.Fill };
         dashboard.LogoutRequested+=(_,_)=> {LogoutRequested=true;Close();};
         Application.Idle+=StyleOpenWindows;

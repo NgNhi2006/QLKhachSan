@@ -5,24 +5,22 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets/hotel-desk.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.89" />
-    <PackageReference Include="Krypton.Navigator" Version="105.26.7.201" />
     <PackageReference Include="Krypton.Toolkit" Version="105.26.7.201" />
-    <PackageReference Include="LiveCharts" Version="0.9.7" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
-    <PackageReference Include="QuestPDF" Version="2026.9.1" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="../Database/Database.sql" LogicalName="QLKhachSan.Database.sql" />
-    <EmbeddedResource Update="Assets/hotel-room.jpg" LogicalName="QLKhachSan.Assets.hotel-room.jpg" />
     <EmbeddedResource Include="Assets/hotel-room.jpg" LogicalName="QLKhachSan.Assets.hotel-room.jpg" />
+    <EmbeddedResource Include="Assets/sidebar-lounge.png" LogicalName="QLKhachSan.Assets.sidebar-lounge.png" />
+    <Content Include="Assets/hotel-desk.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Fonts/Inter-Regular.ttf" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Fonts/Inter-Bold.ttf" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Fonts/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />

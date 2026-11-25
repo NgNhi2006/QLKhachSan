@@ -6,7 +6,7 @@ public sealed partial class HotelTransaction
 {
     public async Task<List<RevenueDay>> RevenueTrendAsync(DateTime from,DateTime until)
     {
-        var rows=await Query("SELECT Day,SUM(Rooms),SUM(Services),SUM(Forfeits) FROM (SELECT CAST(i.ThoiDiemLapHoaDon AS date) Day,i.TienPhong Rooms,i.TienDichVu Services,CAST(0 AS decimal(18,2)) Forfeits FROM dbo.HoaDon i WHERE i.ThoiDiemLapHoaDon>=@p0 AND i.ThoiDiemLapHoaDon<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) UNION ALL SELECT CAST(ThoiDiemTao AS date),0,0,SoTien FROM dbo.GiaoDichThanhToan WHERE LoaiGiaoDich='Forfeit' AND ThoiDiemTao>=@p0 AND ThoiDiemTao<@p1 UNION ALL SELECT CAST(a.ThoiDiemLap AS date),0,-a.SoTien,0 FROM dbo.DieuChinhHoaDon a WHERE a.ThoiDiemLap>=@p0 AND a.ThoiDiemLap<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=a.MaHoaDon)) r GROUP BY Day ORDER BY Day",r=>new RevenueDay(r.GetDateTime(0),r.GetDecimal(1),r.GetDecimal(2),r.GetDecimal(3)),from,until);
+        var rows=await Query("SELECT Day,SUM(Rooms),SUM(Services),SUM(Forfeits) FROM (SELECT CAST(i.ThoiDiemLapHoaDon AS date) Day,i.TienPhong Rooms,i.TienDichVu Services,CAST(0 AS decimal(18,2)) Forfeits FROM dbo.HoaDon i WHERE i.ThoiDiemLapHoaDon>=@p0 AND i.ThoiDiemLapHoaDon<@p1 UNION ALL SELECT CAST(ThoiDiemTao AS date),0,0,SoTien FROM dbo.GiaoDichThanhToan WHERE LoaiGiaoDich='Forfeit' AND ThoiDiemTao>=@p0 AND ThoiDiemTao<@p1) r GROUP BY Day ORDER BY Day",r=>new RevenueDay(r.GetDateTime(0),r.GetDecimal(1),r.GetDecimal(2),r.GetDecimal(3)),from,until);
         var byDate=rows.ToDictionary(r=>r.Day);
         return Enumerable.Range(0,(until.Date-from.Date).Days).Select(i=>from.Date.AddDays(i)).Select(day=>byDate.GetValueOrDefault(day)??new RevenueDay(day,0,0,0)).ToList();
     }
@@ -40,9 +40,18 @@ ORDER BY 6,1",r=>new TodayScheduleItem(r.GetInt64(0),r.GetString(1),r.GetString(
         await Execute("IF EXISTS(SELECT 1 FROM dbo.KhachHang WHERE SoGiayTo=@p2) UPDATE dbo.KhachHang SET Ten=@p0,SoDienThoai=@p1 WHERE SoGiayTo=@p2; ELSE INSERT dbo.KhachHang(Ten,SoDienThoai,SoGiayTo) VALUES(@p0,@p1,@p2)",guest.Name,guest.Phone,guest.Identity);
         await Execute("UPDATE dbo.LuotLuuTru SET MaPhong=@p1,TenKhach=@p2,SoDienThoai=@p3,SoGiayTo=@p4,MaKhachHang=(SELECT Ma FROM dbo.KhachHang WHERE SoGiayTo=@p4),ThoiDiemDen=@p5,ThoiDiemDi=@p6,HanGiuPhong=@p7,PhienBan=PhienBan+1 WHERE Ma=@p0",stay.Id,room.Id,guest.Name,guest.Phone,guest.Identity,arrival,departure,receiveBy);
     }
-    public Task<int> UpdateOrderAsync(long id,int quantity,DateTime now) => Execute("UPDATE dbo.YeuCauDichVu SET SoLuong=@p1,ThoiDiemGiao=CASE WHEN SoLuongDaGiao=@p1 THEN @p2 ELSE NULL END WHERE Ma=@p0",id,quantity,now);
-    public Task<int> CancelOrderAsync(long id,DateTime now,string reason) => Execute("UPDATE dbo.YeuCauDichVu SET ThoiDiemHuy=@p1,LyDoHuy=@p2 WHERE Ma=@p0",id,now,reason);
-    public Task<int> DeliverOrderAsync(long id,int quantity,DateTime now) => Execute("UPDATE dbo.YeuCauDichVu SET SoLuongDaGiao=SoLuongDaGiao+@p1,ThoiDiemGiao=CASE WHEN SoLuongDaGiao+@p1=SoLuong THEN @p2 ELSE NULL END WHERE Ma=@p0",id,quantity,now);
+    public async Task UpdateOccupiedGuestAsync(Stay stay,GuestInput guest)
+    {
+        await Execute("IF EXISTS(SELECT 1 FROM dbo.KhachHang WHERE SoGiayTo=@p2) UPDATE dbo.KhachHang SET Ten=@p0,SoDienThoai=@p1 WHERE SoGiayTo=@p2; ELSE INSERT dbo.KhachHang(Ten,SoDienThoai,SoGiayTo) VALUES(@p0,@p1,@p2)",guest.Name,guest.Phone,guest.Identity);
+        await Execute("UPDATE dbo.LuotLuuTru SET TenKhach=@p1,SoDienThoai=@p2,SoGiayTo=@p3,MaKhachHang=(SELECT Ma FROM dbo.KhachHang WHERE SoGiayTo=@p3),PhienBan=PhienBan+1 WHERE Ma=@p0",stay.Id,guest.Name,guest.Phone,guest.Identity);
+    }
+    public async Task<bool> HasStayFinancialActivityAsync(long stayId) =>
+        await Scalar("SELECT COUNT_BIG(*) FROM dbo.GiaoDichThanhToan WHERE MaLuotLuuTru=@p0",stayId)>0 ||
+        await Scalar("SELECT COUNT_BIG(*) FROM dbo.HoaDon WHERE MaLuotLuuTru=@p0",stayId)>0;
+    public Task<int> UpdateOrderAsync(long id,int quantity,DateTime now) => Task.FromResult(0);
+    public Task<int> MoveOrderAsync(long id,long targetStayId) => Task.FromResult(0);
+    public Task<int> CancelOrderAsync(long id,DateTime now,string reason) => Task.FromResult(0);
+    public Task<int> DeliverOrderAsync(long id,int quantity,DateTime now) => Task.FromResult(0);
     public Task<List<PaymentEntry>> PaymentsAsync(DateTime from,DateTime until) => Query("SELECT p.Ma,p.MaLuotLuuTru,s.TenKhach,p.LoaiGiaoDich,p.SoTien,p.ThoiDiemTao,p.PhuongThucThanhToan,p.GhiChu,u.TenDangNhap FROM dbo.GiaoDichThanhToan p JOIN dbo.LuotLuuTru s ON s.Ma=p.MaLuotLuuTru JOIN dbo.TaiKhoanNhanVien u ON u.Ma=p.MaNguoiTao WHERE p.ThoiDiemTao>=@p0 AND p.ThoiDiemTao<@p1 ORDER BY p.Ma DESC",r=>new PaymentEntry(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetDecimal(4),r.GetDateTime(5),r.GetString(6),r.GetString(7),r.GetString(8)),from,until);
     public async Task<CustomerDepositHistory> DepositHistoryAsync(int customerId)
     {
@@ -56,7 +65,6 @@ ORDER BY 6,1",r=>new TodayScheduleItem(r.GetInt64(0),r.GetString(1),r.GetString(
             i.TienPhong+i.TienDichVu,p.PhuongThucThanhToan,p.GhiChu
         FROM dbo.GiaoDichThanhToan p JOIN dbo.LuotLuuTru s ON s.Ma=p.MaLuotLuuTru
         JOIN dbo.Phong r ON r.Ma=s.MaPhong LEFT JOIN dbo.HoaDon i ON i.MaLuotLuuTru=s.Ma
-            AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma)
         WHERE p.LoaiGiaoDich='Deposit' AND p.ThoiDiemTao>=@p0 AND p.ThoiDiemTao<@p1
         ORDER BY p.Ma DESC
         """,r=>new DepositReceipt(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetString(4),
@@ -66,15 +74,13 @@ ORDER BY 6,1",r=>new TodayScheduleItem(r.GetInt64(0),r.GetString(1),r.GetString(
         Execute("UPDATE dbo.TaiKhoanNhanVien SET TenHienThi=@p1,AnhDaiDien=CONVERT(varbinary(max),@p2) WHERE Ma=@p0 AND DaLuuTru=0",id,displayName,avatarPng);
     public Task<long> ActiveAdminsAsync() => Scalar("SELECT COUNT_BIG(*) FROM dbo.TaiKhoanNhanVien WHERE DangHoatDong=1 AND DaLuuTru=0 AND VaiTro='Admin'");
     public Task<int> ArchiveUsersAsync() => Execute("UPDATE dbo.TaiKhoanNhanVien SET DaLuuTru=1,DangHoatDong=0,PhienBanBaoMat=PhienBanBaoMat+1,KhoaDen=NULL WHERE DaLuuTru=0");
-    public Task<int> UpdateUserAsync(int id,string role,bool active) => Execute("DELETE FROM dbo.PhanQuyenNhanVien WHERE MaNhanVien=@p0 AND EXISTS(SELECT 1 FROM dbo.TaiKhoanNhanVien WHERE Ma=@p0 AND VaiTro<>@p1); UPDATE dbo.TaiKhoanNhanVien SET DaTuyChinhQuyen=CASE WHEN VaiTro<>@p1 THEN 0 ELSE DaTuyChinhQuyen END,VaiTro=@p1,DangHoatDong=@p2,PhienBanBaoMat=PhienBanBaoMat+1,SoLanDangNhapSai=0,KhoaDen=NULL WHERE Ma=@p0",id,role,active);
-    public Task<List<ServiceCatalogItem>> CatalogAsync() => Query("SELECT Ma,DanhMuc,Ten,DonGia,DonViTinh,DangHoatDong,PhienBan FROM dbo.DichVu ORDER BY DanhMuc,Ten",r=>new ServiceCatalogItem(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetDecimal(3),r.GetString(4),r.GetBoolean(5),r.GetInt64(6)));
-    public Task<int> SaveServiceAsync(ServiceCatalogItem item) => item.Id==0
-        ? Execute("INSERT dbo.DichVu(DanhMuc,Ten,DonGia,DonViTinh,DangHoatDong) VALUES(@p0,@p1,@p2,@p3,@p4)",item.Category,item.Name,item.Price,item.Unit,item.Active)
-        : Execute("UPDATE dbo.DichVu SET DanhMuc=@p1,Ten=@p2,DonGia=@p3,DonViTinh=@p4,DangHoatDong=@p5,PhienBan=PhienBan+1 WHERE Ma=@p0 AND PhienBan=@p6",item.Id,item.Category,item.Name,item.Price,item.Unit,item.Active,item.Version);
+    public Task<int> UpdateUserAsync(int id,string role,bool active) => Execute("UPDATE dbo.TaiKhoanNhanVien SET VaiTro=@p1,DangHoatDong=@p2,PhienBanBaoMat=PhienBanBaoMat+1,SoLanDangNhapSai=0,KhoaDen=NULL WHERE Ma=@p0",id,role,active);
+    public Task<List<ServiceCatalogItem>> CatalogAsync() => Task.FromResult(new List<ServiceCatalogItem>());
+    public Task<int> SaveServiceAsync(ServiceCatalogItem item) => Task.FromResult(0);
     public Task<int> SaveRoomAsync(Room room) => room.Id==0
         ? Execute("INSERT dbo.Phong(SoPhong,Loai,DonGiaPhong,TienCoc) VALUES(@p0,@p1,@p2,@p3)",room.Number,room.Type,room.Rate,room.Deposit)
         : Execute("UPDATE dbo.Phong SET SoPhong=@p1,Loai=@p2,DonGiaPhong=@p3,TienCoc=@p4,PhienBan=PhienBan+1 WHERE Ma=@p0 AND PhienBan=@p5",room.Id,room.Number,room.Type,room.Rate,room.Deposit,room.Version);
     public Task<long> RoomHistoryCountAsync(int roomId) => Scalar("SELECT COUNT_BIG(*) FROM dbo.LuotLuuTru WHERE MaPhong=@p0",roomId);
     public Task<int> DeleteRoomAsync(Room room) => Execute("DELETE FROM dbo.Phong WHERE Ma=@p0 AND PhienBan=@p1 AND NOT EXISTS(SELECT 1 FROM dbo.LuotLuuTru WHERE MaPhong=@p0)",room.Id,room.Version);
-    public Task<List<AuditEntry>> AuditsAsync(DateTime from,DateTime until) => Query("SELECT TOP(1000) a.Ma,a.ThoiDiemTao,u.TenDangNhap,a.HanhDong,a.ChiTiet FROM dbo.NhatKyThaoTac a JOIN dbo.TaiKhoanNhanVien u ON u.Ma=a.MaNhanVien WHERE a.ThoiDiemTao>=@p0 AND a.ThoiDiemTao<@p1 ORDER BY a.Ma DESC",r=>new AuditEntry(r.GetInt64(0),r.GetDateTime(1),r.GetString(2),r.GetString(3),r.GetString(4)),from,until);
+    public Task<List<AuditEntry>> AuditsAsync(DateTime from,DateTime until) => Task.FromResult(new List<AuditEntry>());
 }

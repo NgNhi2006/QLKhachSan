@@ -4,15 +4,19 @@ namespace QLKhachSan.DAL;
 
 public sealed partial class HotelTransaction
 {
-    public async Task<MenuConfiguration> MenuConfigurationAsync() => new(
-        await Query("SELECT MaMenu,TieuDe,MoTa,BieuTuong,MauSac,ThuTuHienThi,DangHienThi,CoSan,IconPng FROM dbo.CauHinhMenu ORDER BY ThuTuHienThi,MaMenu",
-            r=>new ConfiguredMenu(r.GetString(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetInt32(5),r.GetBoolean(6),r.GetBoolean(7),r.IsDBNull(8)?null:(byte[])r.GetValue(8))),
-        await Query("SELECT Ma,MaMenu,TieuDe,ThuTuHienThi,DangHienThi,CoSan FROM dbo.CauHinhMenuCon ORDER BY ThuTuHienThi,Ma",
-            r=>new ConfiguredSubmenu(r.GetInt64(0),r.GetString(1),r.GetString(2),r.GetInt32(3),r.GetBoolean(4),r.GetBoolean(5))),
-        await Query("SELECT Ma,MaMenuCon,TieuDe,MaThaoTac,ThuTuHienThi,DangHienThi,CoSan FROM dbo.CauHinhChucNang ORDER BY ThuTuHienThi,Ma",
-            r=>new ConfiguredFunction(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetInt32(4),r.GetBoolean(5),r.GetBoolean(6))),
-        await Query("SELECT Ma,MaMenuCon,TieuDe,ThuTuHienThi,DangHienThi,VaiTro,CauTruc FROM dbo.CauHinhChucNangMoi ORDER BY ThuTuHienThi,Ma",
-            r=>new ConfiguredCustomFunction(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetInt32(3),r.GetBoolean(4),r.GetString(5),r.GetString(6))));
+    public async Task<MenuConfiguration> MenuConfigurationAsync()
+    {
+        var hasTable = await Scalar("SELECT CASE WHEN OBJECT_ID(N'dbo.CauHinhMenu', N'U') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+        if (!hasTable) return new MenuConfiguration([], [], [], []);
+        return new(
+            await Query("SELECT MaMenu,TieuDe,MoTa,BieuTuong,MauSac,ThuTuHienThi,DangHienThi,CoSan,IconPng FROM dbo.CauHinhMenu ORDER BY ThuTuHienThi,MaMenu",
+                r=>new ConfiguredMenu(r.GetString(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetInt32(5),r.GetBoolean(6),r.GetBoolean(7),r.IsDBNull(8)?null:(byte[])r.GetValue(8))),
+            await Query("SELECT Ma,MaMenu,TieuDe,ThuTuHienThi,DangHienThi,CoSan FROM dbo.CauHinhMenuCon ORDER BY ThuTuHienThi,Ma",
+                r=>new ConfiguredSubmenu(r.GetInt64(0),r.GetString(1),r.GetString(2),r.GetInt32(3),r.GetBoolean(4),r.GetBoolean(5))),
+            await Query("SELECT Ma,MaMenuCon,TieuDe,MaThaoTac,ThuTuHienThi,DangHienThi,CoSan FROM dbo.CauHinhChucNang ORDER BY ThuTuHienThi,Ma",
+                r=>new ConfiguredFunction(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetInt32(4),r.GetBoolean(5),r.GetBoolean(6))),
+            []);
+    }
 
     public Task<int> SaveConfiguredMenuAsync(ConfiguredMenu item) => Execute("""
         MERGE dbo.CauHinhMenu AS target USING (SELECT @p0 AS MaMenu) AS source ON target.MaMenu=source.MaMenu

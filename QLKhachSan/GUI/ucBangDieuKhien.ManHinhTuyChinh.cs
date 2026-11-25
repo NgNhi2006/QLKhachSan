@@ -205,6 +205,32 @@ public partial class ucDashboard
             if(days<0)throw new BusinessException("Ngày trả xe phải từ ngày nhận xe trở đi.");
             total.Text=(Math.Max(1,days)*rate).ToString("0.##",CultureInfo.CurrentCulture);
         }
+        void Calculate(CustomScreenAction action)
+        {
+            decimal Read(string? key)
+            {
+                if(key is null || !controls.TryGetValue(key,out var control) || control is not TextBox input ||
+                    !decimal.TryParse(input.Text,NumberStyles.Number,CultureInfo.CurrentCulture,out var value))
+                    throw new BusinessException($"Hãy nhập số hợp lệ cho ô {design.Fields.FirstOrDefault(f=>f.Key==key)?.Label??key}.");
+                return value;
+            }
+            var first=Read(action.FirstKey);var second=Read(action.SecondKey);
+            var result=action.Operator switch
+            {
+                "+"=>first+second,"-"=>first-second,"*"=>first*second,
+                "/" when second!=0=>first/second,
+                "/"=>throw new BusinessException("Không thể chia cho 0."),
+                _=>throw new BusinessException("Phép tính chưa được cấu hình.")
+            };
+            if(action.TargetKey is null || !controls.TryGetValue(action.TargetKey,out var target) || target is not TextBox output)
+                throw new BusinessException("Ô kết quả không còn tồn tại.");
+            var targetField=design.Fields.First(f=>f.Key==action.TargetKey);
+            if(targetField.Kind=="integer" && result!=decimal.Truncate(result))
+                throw new BusinessException("Kết quả có phần thập phân; hãy chọn ô kết quả kiểu số thập phân hoặc tiền tệ.");
+            if(targetField.Kind=="percent" && result is <0 or >100)
+                throw new BusinessException("Kết quả phần trăm phải từ 0 đến 100.");
+            output.Text=result.ToString("0.##",CultureInfo.CurrentCulture);
+        }
         if(design.Actions is { } customActions)
             foreach(var action in customActions)
             {
@@ -228,6 +254,7 @@ public partial class ucDashboard
                             case "export":await ExportAsync();break;
                             case "print":PrintSelected();break;
                             case "rental_calc":CalculateRental();break;
+                            case "calculate":Calculate(action);break;
                         }
                     }
                     catch(Exception ex){Ui.Error(form,ex);}

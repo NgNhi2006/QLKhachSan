@@ -35,9 +35,9 @@ public partial class ucDashboard : UserControl
         ExcelExport.Attach(dgvDatCoc,"Đặt cọc và giữ chỗ");
         ExcelExport.Attach(dgvLichTrinh,"Lịch đến và đi");
         pnlLeftTools.AutoScroll=true;
-        lblClock.Text=DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+        lblClock.Text=DateTime.Now.ToString("dd/MM/yyyy\nHH:mm");
         components??=new Container(); components.Add(clock);components.Add(refreshTimer);
-        clock.Tick+=(_,_)=>lblClock.Text=ServerNow.ToString("dd/MM/yyyy HH:mm:ss");
+        clock.Tick+=(_,_)=>lblClock.Text=ServerNow.ToString("dd/MM/yyyy\nHH:mm");
         refreshTimer.Tick+=async (_,_)=>
         {
             if(busy || !Visible)return;
@@ -58,7 +58,8 @@ public partial class ucDashboard : UserControl
         lblCard4Sub.Text="Dự kiến trả trong ngày";btnDatLichPhong.Text="Đặt trước / Giữ chỗ";
         btnBaoTri.Visible=RolePolicy.CanMaintainRooms(user.Role);
         var operatorAccess=RolePolicy.CanOperate(user.Role);
-        foreach(var button in new[]{btnCheckIn,btnDatLichPhong,btnGoiDichVu,btnBaoDonXong})button.Visible=operatorAccess;
+        foreach(var button in new[]{btnCheckIn,btnDatLichPhong,btnBaoDonXong})button.Visible=operatorAccess;
+        btnGoiDichVu.Visible=false;
         // These actions remain available from a selected room, where their context is clear.
         btnDoiPhong.Visible=false;btnGiaHan.Visible=false;
         btnTimPhong.Visible=operatorAccess;txtTimPhong.Visible=operatorAccess;
@@ -66,20 +67,15 @@ public partial class ucDashboard : UserControl
         if(!RolePolicy.CanViewOperations(user.Role)){tabMainView.TabPages.Remove(tabMatrix);tabMainView.TabPages.Remove(tabLichTrinh);pnlRight.Visible=false;}
         if(!RolePolicy.CanViewOperations(user.Role))tlpCards.Visible=true;
         if(!RolePolicy.CanViewFinance(user.Role)){tabMainView.TabPages.Remove(tabThongKe);pnlCard5.Visible=false;}
-        var accounts=new Button {Text=user.Role=="Admin"?"Tài khoản cá nhân / Quyền":"Đổi mật khẩu",Width=190,Height=38,Location=new Point(10,510)};
-        accounts.Click+=async (_,_)=>await Run(ShowAccounts);pnlLeftTools.Controls.Add(accounts);
-        if(user.Role=="Admin")
-        {
-            AddTool("Đăng ký tài khoản",555,ShowRegisterAccount);
-            AddTool("Đặt lại mật khẩu",600,ShowResetPassword);
-        }
+        var accounts=new Button {Text=user.Role=="Admin"?"Nhân viên & phân quyền":"Hồ sơ của tôi",Width=190,Height=38,Location=new Point(10,510)};
+        accounts.Click+=async (_,_)=>await Run(user.Role=="Admin"?ShowAccounts:ShowMyAccountWorkspace);pnlLeftTools.Controls.Add(accounts);
         if(RolePolicy.CanViewFinance(user.Role))
         {
-            var invoices=new Button {Text="Hóa đơn / Doanh thu",Width=190,Height=38,Location=new Point(10,user.Role=="Admin"?645:555)};
+            var invoices=new Button {Text="Hóa đơn / Doanh thu",Width=190,Height=38,Location=new Point(10,555)};
             invoices.Click+=async (_,_)=>await Run(ShowInvoices);pnlLeftTools.Controls.Add(invoices);
         }
-        if(RolePolicy.CanViewOperations(user.Role))AddTool("Lịch đặt / Lịch sử",user.Role=="Admin"?690:600,ShowStayHistory);
-        if(operatorAccess)AddTool("Xử lý dịch vụ",user.Role=="Admin"?780:690,ShowOrderManagement);
+        if(RolePolicy.CanViewOperations(user.Role))AddTool("Lịch đặt / Lịch sử",600,ShowStayHistory);
+        if(operatorAccess)AddTool("Xử lý dịch vụ",690,ShowOrderManagement);
         if(user.Role=="Manager")AddTool("Nhân viên",780,ShowEmployees);
         if(RolePolicy.CanManageCatalog(user.Role))
         {
@@ -217,6 +213,7 @@ public partial class ucDashboard : UserControl
         {
             var page=new TabPage(stage) {BackColor=Color.White,Padding=new Padding(8)};
             var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;page.Controls.Add(grid);
+            if(stage is "Đặt trước" or "Chờ nhận")grid.CellFormatting+=FormatScheduleCheckInCell;
             var empty=new Label {Dock=DockStyle.Fill,BackColor=Color.White,TextAlign=ContentAlignment.MiddleCenter,Font=AppTheme.Body,ForeColor=AppTheme.Muted};
             page.Controls.Add(empty);empty.BringToFront();tabs.TabPages.Add(page);scheduleSections[stage]=(page,grid,empty);
             if(stage=="Đặt trước")grid.CellContentClick+=async (_,e)=>await HandleScheduleBookingAction(grid,e);
@@ -267,7 +264,11 @@ public partial class ucDashboard : UserControl
                     deposit.DefaultCellStyle.Format="N0";
                 if(FunctionPolicy.Can(user,"room.booking_edit"))AddAction(bookings,"edit","Sửa");
                 if(FunctionPolicy.Can(user,"room.booking_cancel"))AddAction(bookings,"cancel","Hủy");
-                if(FunctionPolicy.Can(user,"room.checkin"))AddAction(bookings,"checkin","Nhận phòng");
+                if(FunctionPolicy.Can(user,"room.checkin"))
+                {
+                    AddAction(bookings,"checkin","Nhận phòng");
+                    ConfigureScheduleCheckInAction(bookings,"checkin");
+                }
                 foreach(DataGridViewRow row in bookings.Rows)
                     if(row.DataBoundItem is BookingRow item && item.HạnGiữ<=ServerNow)
                         row.DefaultCellStyle.BackColor=Color.FromArgb(255,246,242);
@@ -287,6 +288,7 @@ public partial class ucDashboard : UserControl
             {
                 AddAction(grid,"action",stage=="Chờ nhận"?"Nhận phòng":"Trả phòng");
                 if(grid.Columns["action"] is { } action){action.AutoSizeMode=DataGridViewAutoSizeColumnMode.None;action.Width=130;}
+                if(stage=="Chờ nhận")ConfigureScheduleCheckInAction(grid,"action");
             }
             section.Tab.Text=$"{stage} ({rows.Count})";
             section.Empty.Text=$"Hôm nay không có lượt {stage.ToLowerInvariant()}.";
@@ -306,11 +308,8 @@ public partial class ucDashboard : UserControl
         if(action=="checkin")
         {
             if(!FunctionPolicy.Can(user,"room.checkin"))return;
-            await Run(async()=>
-            {
-                if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))
-                    await Changed(()=>service.CheckInAsync(stay));
-            });
+            await ShowScheduleCheckInOptions(grid,e.RowIndex,e.ColumnIndex,stay);
+            return;
         }
         else await Run(()=>action=="edit"?ShowEditBooking(stay):ShowCancel(stay));
         RenderSchedule();
@@ -322,13 +321,14 @@ public partial class ucDashboard : UserControl
         var stay=data.Stays.SingleOrDefault(s=>s.Id==row.Id);if(stay is null)return;
         if(stay.Status==StayStatus.Reserved && !FunctionPolicy.Can(user,"room.checkin"))return;
         if(stay.Status==StayStatus.Occupied && !FunctionPolicy.Can(user,"room.checkout"))return;
+        if(stay.Status==StayStatus.Reserved)
+        {
+            await ShowScheduleCheckInOptions(grid,e.RowIndex,e.ColumnIndex,stay);
+            return;
+        }
         await Run(async()=>
         {
-            if(stay.Status==StayStatus.Reserved)
-            {
-                if(Ui.Confirm(this,$"Nhận phòng cho {stay.Guest}?"))await Changed(()=>service.CheckInAsync(stay));
-            }
-            else if(stay.Status==StayStatus.Occupied)await ShowCheckout(stay);
+            if(stay.Status==StayStatus.Occupied)await ShowCheckout(stay);
         });
     }
     private void RenderHousekeeping()

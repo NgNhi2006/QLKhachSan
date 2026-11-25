@@ -16,11 +16,23 @@ public partial class ucDashboard
             rows.Add(new BillDetailRow($"PHÒNG {q.Room.Number} · {q.Room.Type}","",true));
             rows.Add(new BillDetailRow(
                 $"Nhận {(q.Stay.CheckIn??q.Stay.Arrival):dd/MM/yyyy HH:mm} · Trả {q.At:dd/MM/yyyy HH:mm}",""));
-            rows.Add(new BillDetailRow("Tiền phòng",$"{q.RoomCharge:N0} đ"));
-            foreach(var line in q.Lines.Where(line=>line.Cancelled is null))
+            rows.Add(new BillDetailRow($"Tiền phòng · {BilledRoomDays(q)} ngày",$"{q.RoomCharge:N0} đ"));
+            if(q.DraftLines is { } draft)
+            {
+                foreach(var line in draft.Where(x=>x.Category!="Room" && x.Quantity>0))
+                    rows.Add(new BillDetailRow(
+                        line.AmountOverride is null
+                            ?$"  {line.Name} · {line.Quantity} × {line.UnitPrice:N0} đ"
+                            :$"  {line.Name} · SL {line.Quantity} · Đã chỉnh thành tiền",
+                        $"{line.Total:N0} đ"));
+            }
+            else foreach(var line in q.Lines.Where(line=>line.Cancelled is null))
                 rows.Add(new BillDetailRow(
                     $"  {line.Name} · {line.Quantity} × {line.Price:N0} đ",$"{line.Total:N0} đ"));
-            rows.Add(new BillDetailRow("Tổng phòng và dịch vụ",$"{q.Total:N0} đ",true));
+            rows.Add(new BillDetailRow("Tổng phòng và dịch vụ",$"{q.RoomCharge+q.Services:N0} đ",true));
+            if(q.DiscountCode is { } code)
+                rows.Add(new BillDetailRow($"Mã giảm giá {code}",$"−{q.DiscountAmount:N0} đ"));
+            rows.Add(new BillDetailRow("Tổng sau giảm giá",$"{q.Total:N0} đ",true));
             rows.Add(new BillDetailRow("Cọc đã thu",$"{q.Stay.Deposit:N0} đ"));
             rows.Add(new BillDetailRow(q.ToCollect>0?"Cần thu thêm":"Cần hoàn cọc",
                 $"{(q.ToCollect>0?q.ToCollect:q.ToRefund):N0} đ",true));
@@ -29,7 +41,7 @@ public partial class ucDashboard
         return rows;
     }
 
-    private async Task ShowBillBeforePayment(IReadOnlyList<BillQuote> quotes,string method,string reference)
+    private async Task ShowBillBeforePayment(IReadOnlyList<BillQuote> quotes,string method,string reference,IWin32Window? owner=null)
     {
         if(quotes.Count==0)throw new BusinessException("Chưa chọn phòng để xem bill.");
         var settings=AppSettings.Load();
@@ -127,7 +139,7 @@ public partial class ucDashboard
                 using var printer=new PrintDialog {Document=document,UseEXDialog=true};
                 if(printer.ShowDialog(form)==DialogResult.OK)document.Print();
             };
-            form.ShowDialog(this);
+            form.ShowDialog(owner??this);
         }
     }
 }

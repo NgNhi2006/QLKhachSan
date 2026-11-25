@@ -169,6 +169,7 @@ public partial class ucDashboard
         foreach(var (kind,caption) in new[]{("save","Lưu"),("new","Tạo mới"),("delete","Xóa"),
             ("duplicate","Sao chép"),("refresh","Làm mới"),("search","Tìm kiếm"),
             ("export","Xuất CSV"),("print","In bản ghi"),("clear","Xóa trắng"),
+            ("calculate","Tính từ các ô"),
             ("rental_calc","Tính tiền thuê")})
         {
             var tile=new Button {Text="▣  "+caption,Width=132,Height=36,Margin=new Padding(5),
@@ -210,7 +211,16 @@ public partial class ucDashboard
         void AddAction(string kind,string caption)
         {
             if(actionItems.Count>=20){Ui.Error(dialog,new BusinessException("Tối đa 20 nút hành động."));return;}
-            actionItems.Add(new CustomScreenAction(caption,kind));Render();
+            var numeric=fields.Where(f=>f.Kind is "number" or "integer" or "currency" or "percent").ToArray();
+            if(kind=="calculate" && numeric.Length<2)
+            {
+                Ui.Error(dialog,new BusinessException("Hãy tạo ít nhất hai ô kiểu số hoặc tiền tệ trước khi thêm nút tính."));return;
+            }
+            var action=kind=="calculate"
+                ?new CustomScreenAction(caption,kind,numeric[0].Key,numeric[0].Key,numeric[1].Key,"+")
+                :new CustomScreenAction(caption,kind);
+            actionItems.Add(action);Render();
+            if(kind=="calculate")EditAction(action);
         }
         int SelectedIndex()=>grid.CurrentRow?.Index??-1;
         void SelectField(int index)
@@ -366,15 +376,35 @@ public partial class ucDashboard
         }
         void EditAction(CustomScreenAction action)
         {
-            using var input=new InputDialog("Sửa nút hành động",460,260);
+            using var input=new InputDialog("Sửa nút hành động",500,action.Kind=="calculate"?480:260);
             var name=Ui.Text(40);name.Text=action.Label;
             input.Add("Tên hiển thị trên nút",name);
+            var numeric=fields.Where(f=>f.Kind is "number" or "integer" or "currency" or "percent").ToArray();
+            ComboBox? first=null,second=null,target=null,operation=null;
+            if(action.Kind=="calculate")
+            {
+                if(numeric.Length<2){Ui.Error(dialog,new BusinessException("Nút tính cần ít nhất hai ô kiểu số."));return;}
+                first=Ui.Combo(numeric.Select(f=>f.Label).ToArray());
+                second=Ui.Combo(numeric.Select(f=>f.Label).ToArray());
+                target=Ui.Combo(numeric.Select(f=>f.Label).ToArray());
+                operation=Ui.Combo(new[]{"Cộng (+)","Trừ (-)","Nhân (×)","Chia (÷)"});
+                first.SelectedIndex=Math.Max(0,Array.FindIndex(numeric,f=>f.Key==action.FirstKey));
+                second.SelectedIndex=Math.Max(0,Array.FindIndex(numeric,f=>f.Key==action.SecondKey));
+                target.SelectedIndex=Math.Max(0,Array.FindIndex(numeric,f=>f.Key==action.TargetKey));
+                operation.SelectedIndex=Math.Max(0,Array.IndexOf(new[]{"+","-","*","/"},action.Operator));
+                input.Add("Ô thứ nhất",first);input.Add("Phép tính",operation);
+                input.Add("Ô thứ hai",second);input.Add("Ghi kết quả vào",target);
+            }
             input.Action("LƯU NÚT",async()=>
             {
                 var index=actionItems.IndexOf(action);
                 if(index<0)return;
                 var copy=actionItems.ToList();
-                copy[index]=action with {Label=name.Text.Trim()};
+                copy[index]=action.Kind=="calculate"
+                    ?action with {Label=name.Text.Trim(),FirstKey=numeric[first!.SelectedIndex].Key,
+                        SecondKey=numeric[second!.SelectedIndex].Key,TargetKey=numeric[target!.SelectedIndex].Key,
+                        Operator=new[]{"+","-","*","/"}[operation!.SelectedIndex]}
+                    :action with {Label=name.Text.Trim()};
                 HotelService.ParseCustomDesign(JsonSerializer.Serialize(
                     new CustomScreenDesign(fields,"Lưu","Tạo mới","Xóa",copy)));
                 actionItems=copy;Render();await Task.CompletedTask;

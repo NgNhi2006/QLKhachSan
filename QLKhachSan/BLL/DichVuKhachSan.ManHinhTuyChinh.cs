@@ -21,9 +21,18 @@ public sealed partial class HotelService
             throw new BusinessException("Các ô dữ liệu có tên, loại hoặc lựa chọn không hợp lệ.");
         if(new[]{design.SaveLabel,design.NewLabel,design.DeleteLabel}.Any(x=>x.Trim().Length is <1 or >40))
             throw new BusinessException("Tên nút thao tác cần từ 1 đến 40 ký tự.");
-        if(design.Actions is {Count: >20} || design.Actions?.Any(x=>x.Label.Trim().Length is <1 or >40 ||
-            x.Kind is not ("save" or "new" or "delete" or "duplicate" or "refresh" or "search" or
-                "export" or "print" or "clear" or "rental_calc"))==true)
+        bool InvalidAction(CustomScreenAction action)
+        {
+            if(action.Label.Trim().Length is <1 or >40 || action.Kind is not
+                ("save" or "new" or "delete" or "duplicate" or "refresh" or "search" or
+                 "export" or "print" or "clear" or "rental_calc" or "calculate"))return true;
+            if(action.Kind!="calculate")return false;
+            if(action.Operator is not ("+" or "-" or "*" or "/"))return true;
+            return new[]{action.TargetKey,action.FirstKey,action.SecondKey}.Any(key=>
+                key is null || !design.Fields.Any(field=>field.Key==key &&
+                    field.Kind is ("number" or "integer" or "currency" or "percent")));
+        }
+        if(design.Actions is {Count: >20} || design.Actions?.Any(InvalidAction)==true)
             throw new BusinessException("Danh sách nút hành động không hợp lệ.");
         return design;
     }

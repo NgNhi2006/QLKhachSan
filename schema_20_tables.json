@@ -1,0 +1,202 @@
+{
+  "TaiKhoanNhanVien": [
+    "Ma int IDENTITY PRIMARY KEY",
+    "TenDangNhap nvarchar(50) NOT NULL UNIQUE",
+    "MatKhauBam varbinary(32) NOT NULL",
+    "MuoiBam varbinary(16) NOT NULL",
+    "SoLanBam int NOT NULL CHECK(SoLanBam>=100000)",
+    "VaiTro varchar(20) NOT NULL CHECK(VaiTro IN ('Admin','Reception'))",
+    "DangHoatDong bit NOT NULL DEFAULT 1",
+    "SoLanDangNhapSai int NOT NULL DEFAULT 0",
+    "KhoaDen datetime2 NULL"
+  ],
+  "Phong": [
+    "Ma int IDENTITY PRIMARY KEY",
+    "SoPhong nvarchar(10) NOT NULL UNIQUE",
+    "Loai nvarchar(20) NOT NULL CHECK(Loai IN(N'Đơn',N'Đôi',N'VIP'))",
+    "DonGiaPhong decimal(18,2) NOT NULL CHECK(DonGiaPhong>0)",
+    "TienCoc decimal(18,2) NOT NULL CHECK(TienCoc>=0)",
+    "TrangThai varchar(20) NOT NULL DEFAULT 'Trong' CHECK(TrangThai IN('Trong','DaDat','DangO','DangDon','BaoTri'))",
+    "PhienBan bigint NOT NULL DEFAULT 1"
+  ],
+  "KhachHang": [
+    "Ma int IDENTITY PRIMARY KEY",
+    "Ten nvarchar(100) NOT NULL",
+    "SoDienThoai nvarchar(20) NOT NULL",
+    "SoGiayTo nvarchar(20) NOT NULL UNIQUE",
+    "ThoiDiemTao datetime2 NOT NULL DEFAULT SYSDATETIME()"
+  ],
+  "LuotLuuTru": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaPhong int NOT NULL REFERENCES dbo.Phong(Ma)",
+    "MaKhachHang int NOT NULL REFERENCES dbo.KhachHang(Ma)",
+    "TenKhach nvarchar(100) NOT NULL",
+    "SoDienThoai nvarchar(20) NOT NULL",
+    "SoGiayTo nvarchar(20) NOT NULL",
+    "TrangThai varchar(20) NOT NULL CHECK(TrangThai IN('Reserved','Occupied','Paid','Cancelled'))",
+    "ConHieuLuc bit NOT NULL",
+    "ThoiDiemTao datetime2 NOT NULL",
+    "ThoiDiemDen datetime2 NOT NULL",
+    "ThoiDiemDi datetime2 NOT NULL",
+    "ThoiDiemNhanPhong datetime2 NULL",
+    "ThoiDiemTraPhong datetime2 NULL",
+    "HanGiuPhong datetime2 NULL",
+    "TienCoc decimal(18,2) NOT NULL CHECK(TienCoc>=0)",
+    "PhienBan bigint NOT NULL DEFAULT 1",
+    "MaNguoiTao int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "CONSTRAINT CK_Stays_Departure CHECK(ThoiDiemDi>COALESCE(ThoiDiemNhanPhong,ThoiDiemDen))",
+    "CHECK((ConHieuLuc=1 AND TrangThai IN('Reserved','Occupied')) OR (ConHieuLuc=0 AND TrangThai IN('Paid','Cancelled')))"
+  ],
+  "ChangLuuTru": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaLuotLuuTru bigint NOT NULL REFERENCES dbo.LuotLuuTru(Ma)",
+    "MaPhong int NOT NULL REFERENCES dbo.Phong(Ma)",
+    "ThoiDiemBatDau datetime2 NOT NULL",
+    "ThoiDiemKetThuc datetime2 NULL",
+    "DonGiaPhong decimal(18,2) NOT NULL CHECK(DonGiaPhong>0)",
+    "CHECK(ThoiDiemKetThuc IS NULL OR ThoiDiemKetThuc>=ThoiDiemBatDau)"
+  ],
+  "DichVu": [
+    "Ma int IDENTITY PRIMARY KEY",
+    "DanhMuc nvarchar(100) NOT NULL",
+    "Ten nvarchar(150) NOT NULL UNIQUE",
+    "DonGia decimal(18,2) NOT NULL CHECK(DonGia>=0)",
+    "DonViTinh nvarchar(20) NOT NULL",
+    "DangHoatDong bit NOT NULL DEFAULT 1"
+  ],
+  "YeuCauDichVu": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaLuotLuuTru bigint NOT NULL REFERENCES dbo.LuotLuuTru(Ma)",
+    "MaDichVu int NOT NULL REFERENCES dbo.DichVu(Ma)",
+    "DanhMuc nvarchar(100) NOT NULL",
+    "Ten nvarchar(150) NOT NULL",
+    "SoLuong int NOT NULL CHECK(SoLuong BETWEEN 1 AND 100)",
+    "DonGia decimal(18,2) NOT NULL CHECK(DonGia>=0)",
+    "ThoiDiemGoi datetime2 NOT NULL",
+    "ThoiDiemGiao datetime2 NULL",
+    "MaNguoiTao int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)"
+  ],
+  "HangTonKho": [
+    "Ma int IDENTITY PRIMARY KEY",
+    "MaDichVu int NULL UNIQUE REFERENCES dbo.DichVu(Ma)",
+    "Ten nvarchar(150) NOT NULL UNIQUE",
+    "DonViTinh nvarchar(30) NOT NULL",
+    "SoLuong decimal(18,3) NOT NULL DEFAULT 0 CHECK(SoLuong>=0)",
+    "GiaVonBinhQuan decimal(18,2) NOT NULL DEFAULT 0 CHECK(GiaVonBinhQuan>=0)",
+    "NguongDatHang decimal(18,3) NOT NULL DEFAULT 0 CHECK(NguongDatHang>=0)",
+    "DangHoatDong bit NOT NULL DEFAULT 1"
+  ],
+  "BienDongKho": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaMatHang int NOT NULL REFERENCES dbo.HangTonKho(Ma)",
+    "ThoiDiemBienDong datetime2 NOT NULL DEFAULT SYSDATETIME()",
+    "LoaiGiaoDich varchar(12) NOT NULL CHECK(LoaiGiaoDich IN('Purchase','Sale','Spoilage','Internal','Adjustment'))",
+    "SoLuong decimal(18,3) NOT NULL CHECK(SoLuong<>0)",
+    "GiaVonDonVi decimal(18,2) NOT NULL CHECK(GiaVonDonVi>=0)",
+    "MaYeuCauDichVu bigint NULL REFERENCES dbo.YeuCauDichVu(Ma)",
+    "LyDo nvarchar(500) NOT NULL",
+    "MaNguoiTao int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)"
+  ],
+  "HoaDon": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaLuotLuuTru bigint NOT NULL UNIQUE REFERENCES dbo.LuotLuuTru(Ma)",
+    "SoPhongHoaDon nvarchar(10) NOT NULL",
+    "TenKhach nvarchar(100) NOT NULL",
+    "ThoiDiemLapHoaDon datetime2 NOT NULL",
+    "TienPhong decimal(18,2) NOT NULL CHECK(TienPhong>=0)",
+    "TienDichVu decimal(18,2) NOT NULL CHECK(TienDichVu>=0)",
+    "TienCoc decimal(18,2) NOT NULL CHECK(TienCoc>=0)",
+    "TienDaThu decimal(18,2) NOT NULL CHECK(TienDaThu>=0)",
+    "TienDaHoan decimal(18,2) NOT NULL CHECK(TienDaHoan>=0)",
+    "PhuongThucThanhToan nvarchar(30) NOT NULL",
+    "MaNguoiTao int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "CHECK(TienPhong+TienDichVu=TienCoc+TienDaThu-TienDaHoan)"
+  ],
+  "ChiTietBill": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaHoaDon bigint NOT NULL REFERENCES dbo.HoaDon(Ma)",
+    "MaYeuCauDichVu bigint NULL REFERENCES dbo.YeuCauDichVu(Ma)",
+    "DanhMuc varchar(20) NOT NULL CHECK(DanhMuc IN('Room','Service','Other'))",
+    "Ten nvarchar(150) NOT NULL",
+    "SoLuong int NOT NULL CHECK(SoLuong BETWEEN 0 AND 100)",
+    "DonGia decimal(18,2) NOT NULL CHECK(DonGia>=0)",
+    "LyDoSua nvarchar(500) NOT NULL"
+  ],
+  "GiaoDichThanhToan": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaLuotLuuTru bigint NOT NULL REFERENCES dbo.LuotLuuTru(Ma)",
+    "LoaiGiaoDich varchar(20) NOT NULL CHECK(LoaiGiaoDich IN('Deposit','Checkout','Refund','Forfeit'))",
+    "SoTien decimal(18,2) NOT NULL CHECK(SoTien>0)",
+    "ThoiDiemTao datetime2 NOT NULL",
+    "PhuongThucThanhToan nvarchar(30) NOT NULL",
+    "GhiChu nvarchar(300) NOT NULL",
+    "MaNguoiTao int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)"
+  ],
+  "CaTruc": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaThuNgan int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "ThoiDiemMoCa datetime2 NOT NULL DEFAULT SYSDATETIME()",
+    "ThoiDiemDongCa datetime2 NULL",
+    "TienMatDauCa decimal(18,2) NOT NULL CHECK(TienMatDauCa>=0)",
+    "TienMatKiemDem decimal(18,2) NULL CHECK(TienMatKiemDem>=0)",
+    "TienMatDuKien decimal(18,2) NULL",
+    "GiaiTrinh nvarchar(500) NULL",
+    "TrangThai varchar(12) NOT NULL DEFAULT 'Open' CHECK(TrangThai IN('Open','Submitted','Locked'))",
+    "ThoiDiemKhoa datetime2 NULL",
+    "MaNguoiKhoa int NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "CONSTRAINT CK_CashShifts_Close CHECK((TrangThai='Open' AND ThoiDiemDongCa IS NULL AND TienMatKiemDem IS NULL) OR (TrangThai<>'Open' AND ThoiDiemDongCa IS NOT NULL AND TienMatKiemDem IS NOT NULL))"
+  ],
+  "NhatKyThaoTac": [
+    "Ma bigint IDENTITY PRIMARY KEY",
+    "MaNhanVien int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "HanhDong nvarchar(50) NOT NULL",
+    "ChiTiet nvarchar(500) NOT NULL",
+    "ThoiDiemTao datetime2 NOT NULL DEFAULT SYSDATETIME()"
+  ],
+  "ChucNang": [
+    "MaChucNang varchar(80) NOT NULL CONSTRAINT PK_AppFunctions PRIMARY KEY",
+    "TieuDe nvarchar(120) NOT NULL",
+    "MaMenu varchar(40) NOT NULL",
+    "TenMenuPhu nvarchar(100) NOT NULL",
+    "VaiTroDuocPhep varchar(80) NOT NULL",
+    "ThuTuHienThi int NOT NULL",
+    "CONSTRAINT FK_AppFunctions_Submenu FOREIGN KEY(MaMenu,TenMenuPhu) REFERENCES dbo.MenuCon(MaMenu,TieuDe)"
+  ],
+  "PhanQuyenNhanVien": [
+    "MaNhanVien int NOT NULL REFERENCES dbo.TaiKhoanNhanVien(Ma)",
+    "MaChucNang varchar(80) NOT NULL REFERENCES dbo.ChucNang(MaChucNang)",
+    "CONSTRAINT PK_UserFunctionGrants PRIMARY KEY(MaNhanVien,MaChucNang)"
+  ],
+  "CauHinhMenu": [
+    "MaMenu varchar(40) NOT NULL CONSTRAINT PK_MenuConfig PRIMARY KEY",
+    "TieuDe nvarchar(100) NOT NULL",
+    "MoTa nvarchar(180) NOT NULL CONSTRAINT DF_MenuConfig_Description DEFAULT N''",
+    "BieuTuong varchar(30) NOT NULL CONSTRAINT DF_MenuConfig_Icon DEFAULT 'receipt'",
+    "MauSac varchar(7) NOT NULL CONSTRAINT DF_MenuConfig_Color DEFAULT '#534C84'",
+    "ThuTuHienThi int NOT NULL",
+    "DangHienThi bit NOT NULL CONSTRAINT DF_MenuConfig_Active DEFAULT 1",
+    "CoSan bit NOT NULL CONSTRAINT DF_MenuConfig_Builtin DEFAULT 0",
+    "CONSTRAINT CK_MenuConfig_Color CHECK(MauSac LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]')"
+  ],
+  "CauHinhMenuCon": [
+    "Ma bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_SubmenuConfig PRIMARY KEY",
+    "MaMenu varchar(40) NOT NULL REFERENCES dbo.CauHinhMenu(MaMenu)",
+    "TieuDe nvarchar(100) NOT NULL",
+    "ThuTuHienThi int NOT NULL",
+    "DangHienThi bit NOT NULL CONSTRAINT DF_SubmenuConfig_Active DEFAULT 1",
+    "CoSan bit NOT NULL CONSTRAINT DF_SubmenuConfig_Builtin DEFAULT 0",
+    "CONSTRAINT UQ_SubmenuConfig_Name UNIQUE(MaMenu,TieuDe)"
+  ],
+  "CauHinhChucNang": [
+    "Ma bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_FunctionConfig PRIMARY KEY",
+    "MaMenuCon bigint NOT NULL REFERENCES dbo.CauHinhMenuCon(Ma)",
+    "TieuDe nvarchar(120) NOT NULL",
+    "MaThaoTac varchar(80) NOT NULL REFERENCES dbo.ChucNang(MaChucNang)",
+    "ThuTuHienThi int NOT NULL",
+    "DangHienThi bit NOT NULL CONSTRAINT DF_FunctionConfig_Active DEFAULT 1",
+    "CoSan bit NOT NULL CONSTRAINT DF_FunctionConfig_Builtin DEFAULT 0"
+  ],
+  "PhienBanCSDL": [
+    "PhienBan int NOT NULL PRIMARY KEY"
+  ]
+}

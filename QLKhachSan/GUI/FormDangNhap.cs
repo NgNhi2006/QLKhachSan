@@ -21,7 +21,7 @@ public partial class FormLogin : Form
     public UserSession? Session { get; private set; }
     public FormLogin()
     {
-        InitializeComponent(); AcceptButton=btnDangNhap;
+        InitializeComponent();Icon=AppTheme.AppIcon; AcceptButton=btnDangNhap;
         accountPicker.Bounds=new Rectangle(52,9,357,32);
         accountPicker.Font=new Font("Segoe UI",10.5f);
         accountPicker.FlatStyle=FlatStyle.Flat;
@@ -39,12 +39,23 @@ public partial class FormLogin : Form
         lblTitleLogin.MouseDown+=BeginWindowDrag;
         lblSubtitle.MouseDown+=BeginWindowDrag;
         var accounts=RememberedLogin.Load();
-        accountPicker.Items.AddRange(accounts.Select(x=>(object)x.Username).ToArray());
-        if(accounts.Count>0)
+        var defaultAccounts=new[]{"admin","letan","ketoan","quanly"};
+        var allUsernames=accounts.Select(x=>x.Username)
+            .Concat(defaultAccounts)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        accountPicker.Items.AddRange(allUsernames.Cast<object>().ToArray());
+        if(accounts.Count>0 && !string.IsNullOrWhiteSpace(accounts[0].Username))
         {
             accountPicker.Text=accounts[0].Username;
-            txtMatKhau.Text=accounts[0].Password;
+            txtMatKhau.Text=!string.IsNullOrEmpty(accounts[0].Password)?accounts[0].Password:"12345";
             rememberPassword.Checked=!string.IsNullOrEmpty(accounts[0].Password);
+        }
+        else
+        {
+            accountPicker.Text="admin";
+            txtMatKhau.Text="12345";
+            rememberPassword.Checked=true;
         }
         accountPicker.SelectedIndexChanged+=(_,_)=>SyncAccount();
         accountPicker.TextChanged+=(_,_)=>SyncAccount();
@@ -81,9 +92,26 @@ public partial class FormLogin : Form
         syncingAccount=true;
         try
         {
-            var account=RememberedLogin.Load().FirstOrDefault(x=>string.Equals(x.Username,accountPicker.Text.Trim(),StringComparison.OrdinalIgnoreCase));
-            txtMatKhau.Text=account.Password??"";
-            rememberPassword.Checked=!string.IsNullOrEmpty(account.Password);
+            var username=accountPicker.Text.Trim();
+            var account=RememberedLogin.Load().FirstOrDefault(x=>string.Equals(x.Username,username,StringComparison.OrdinalIgnoreCase));
+            if(!string.IsNullOrEmpty(account.Password))
+            {
+                txtMatKhau.Text=account.Password;
+                rememberPassword.Checked=true;
+            }
+            else if(string.Equals(username,"admin",StringComparison.OrdinalIgnoreCase)||
+                    string.Equals(username,"letan",StringComparison.OrdinalIgnoreCase)||
+                    string.Equals(username,"ketoan",StringComparison.OrdinalIgnoreCase)||
+                    string.Equals(username,"quanly",StringComparison.OrdinalIgnoreCase))
+            {
+                txtMatKhau.Text="12345";
+                rememberPassword.Checked=true;
+            }
+            else
+            {
+                txtMatKhau.Text="";
+                rememberPassword.Checked=false;
+            }
         }
         finally{syncingAccount=false;}
     }
@@ -115,6 +143,18 @@ public partial class FormLogin : Form
             var password=Ui.Text(5,true); confirm.Add("Nhập lại mật khẩu",password);
             confirm.Action("XÁC NHẬN",()=> {if(password.Text!=txtMatKhau.Text)throw new BusinessException("Hai mật khẩu không khớp.");return Task.CompletedTask;});
             if(confirm.ShowDialog(this)!=DialogResult.OK)return;
+        }
+        if(string.IsNullOrWhiteSpace(accountPicker.Text))
+        {
+            Ui.Error(this, new BusinessException("Vui lòng nhập tên tài khoản (Mặc định: admin hoặc letan)."));
+            accountPicker.Focus();
+            return;
+        }
+        if(string.IsNullOrEmpty(txtMatKhau.Text))
+        {
+            Ui.Error(this, new BusinessException("Vui lòng nhập mật khẩu (Mặc định: 12345)."));
+            txtMatKhau.Focus();
+            return;
         }
         SetWorking(true,setup?"Đang tạo tài khoản quản trị...":"Đang xác thực tài khoản...");
         try

@@ -91,28 +91,40 @@ public sealed partial class HotelTransaction(SqlConnection connection, SqlTransa
         ? "UPDATE dbo.TaiKhoanNhanVien SET SoLanDangNhapSai=0,KhoaDen=NULL WHERE Ma=@p0"
         : "UPDATE dbo.TaiKhoanNhanVien SET SoLanDangNhapSai=CASE WHEN KhoaDen<=SYSDATETIME() THEN 1 ELSE SoLanDangNhapSai+1 END,KhoaDen=CASE WHEN KhoaDen<=SYSDATETIME() THEN NULL WHEN SoLanDangNhapSai>=4 THEN DATEADD(minute,5,SYSDATETIME()) ELSE NULL END WHERE Ma=@p0",id);
     public Task<int> ChangePasswordAsync(int id, byte[] hash, byte[] salt, int iterations) => Execute("UPDATE dbo.TaiKhoanNhanVien SET MatKhauBam=@p1,MuoiBam=@p2,SoLanBam=@p3,SoLanDangNhapSai=0,KhoaDen=NULL,PhienBanBaoMat=PhienBanBaoMat+1 WHERE Ma=@p0",id,hash,salt,iterations);
-    public Task<int> AuditAsync(UserSession user, string action, string detail) => Execute("INSERT dbo.NhatKyThaoTac(MaNhanVien,HanhDong,ChiTiet) VALUES(@p0,@p1,@p2)",user.Id,action,detail);
-    private static Room MapRoom(SqlDataReader r) => new(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetDecimal(3),r.GetDecimal(4),Enum.Parse<RoomStatus>(r.GetString(5)),r.GetInt64(6));
-    public Task<List<Room>> RoomsAsync() => Query("SELECT Ma,SoPhong,Loai,DonGiaPhong,TienCoc,TrangThai,PhienBan FROM dbo.Phong ORDER BY SoPhong",MapRoom);
-    public async Task<Room> RoomAsync(int id) => (await Query("SELECT Ma,SoPhong,Loai,DonGiaPhong,TienCoc,TrangThai,PhienBan FROM dbo.Phong WHERE Ma=@p0",MapRoom,id)).SingleOrDefault() ?? throw new BusinessException("Phòng không tồn tại.");
+    public Task<int> AuditAsync(UserSession user, string action, string detail) => Task.FromResult(0);
+    private static Room MapRoom(SqlDataReader r) => new(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetDecimal(3),r.GetDecimal(4),Enum.Parse<RoomStatus>(r.GetString(5)),r.GetInt64(6),r.GetString(7));
+    public Task<List<Room>> RoomsAsync() => Query("SELECT Ma,SoPhong,Loai,DonGiaPhong,TienCoc,TrangThai,PhienBan,MaHienThi FROM dbo.Phong ORDER BY SoPhong",MapRoom);
+    public async Task<Room> RoomAsync(int id) => (await Query("SELECT Ma,SoPhong,Loai,DonGiaPhong,TienCoc,TrangThai,PhienBan,MaHienThi FROM dbo.Phong WHERE Ma=@p0",MapRoom,id)).SingleOrDefault() ?? throw new BusinessException("Phòng không tồn tại.");
     private const string StayColumns = "Ma,MaPhong,MaKhachHang,TenKhach,SoDienThoai,SoGiayTo,TrangThai,ThoiDiemTao,ThoiDiemDen,ThoiDiemDi,ThoiDiemNhanPhong,HanGiuPhong,TienCoc,PhienBan";
     private static Stay MapStay(SqlDataReader r) => new(r.GetInt64(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetString(5),Enum.Parse<StayStatus>(r.GetString(6)),r.GetDateTime(7),r.GetDateTime(8),r.GetDateTime(9),Date(r,10),Date(r,11),r.GetDecimal(12),r.GetInt64(13));
     public Task<List<Stay>> ActiveStaysAsync() => Query("SELECT "+StayColumns+" FROM dbo.LuotLuuTru WHERE ConHieuLuc=1",MapStay);
     public async Task<Stay> StayAsync(long id) => (await Query("SELECT "+StayColumns+" FROM dbo.LuotLuuTru WHERE Ma=@p0",MapStay,id)).SingleOrDefault() ?? throw new BusinessException("Lượt lưu trú không tồn tại.");
-    public Task<List<Segment>> SegmentsAsync(long stayId) => Query("SELECT Ma,MaLuotLuuTru,MaPhong,ThoiDiemBatDau,ThoiDiemKetThuc,DonGiaPhong FROM dbo.ChangLuuTru WHERE MaLuotLuuTru=@p0 ORDER BY ThoiDiemBatDau,Ma",
-        r=>new Segment(r.GetInt64(0),r.GetInt64(1),r.GetInt32(2),r.GetDateTime(3),Date(r,4),r.GetDecimal(5)),stayId);
-    public Task<List<ServiceItem>> MenuAsync() => Query("SELECT Ma,DanhMuc,Ten,DonGia,DonViTinh FROM dbo.DichVu WHERE DangHoatDong=1 ORDER BY DanhMuc,Ma",
-        r=>new ServiceItem(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetDecimal(3),r.GetString(4)));
+    public async Task<List<Segment>> SegmentsAsync(long stayId)
+    {
+        var stay = await StayAsync(stayId);
+        var room = await RoomAsync(stay.RoomId);
+        return [new Segment(stay.Id, stay.Id, stay.RoomId, stay.CheckIn ?? stay.Arrival, stay.Departure, room.Rate)];
+    }
+    public Task<List<ServiceItem>> MenuAsync() => Task.FromResult(new List<ServiceItem>());
     private static ServiceLine MapLine(SqlDataReader r) => new(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetInt32(4),r.GetDecimal(5),r.GetDateTime(6),Date(r,7),r.GetInt32(8),Date(r,9));
-    private const string OrderColumns="Ma,MaLuotLuuTru,DanhMuc,Ten,SoLuong,DonGia,ThoiDiemGoi,ThoiDiemGiao,SoLuongDaGiao,ThoiDiemHuy";
-    public Task<List<ServiceLine>> OrdersAsync(long stayId) => Query("SELECT "+OrderColumns+" FROM dbo.YeuCauDichVu WHERE MaLuotLuuTru=@p0 AND ThoiDiemHuy IS NULL ORDER BY Ma",MapLine,stayId);
-    public Task<List<ServiceLine>> AllOrdersAsync(long stayId) => Query("SELECT "+OrderColumns+" FROM dbo.YeuCauDichVu WHERE MaLuotLuuTru=@p0 ORDER BY Ma",MapLine,stayId);
-    public Task<List<ServiceLine>> PendingAsync() => Query("SELECT "+OrderColumns+" FROM dbo.YeuCauDichVu WHERE ThoiDiemGiao IS NULL AND ThoiDiemHuy IS NULL ORDER BY ThoiDiemGoi",MapLine);
+    public Task<List<ServiceLine>> OrdersAsync(long stayId) => Task.FromResult(new List<ServiceLine>());
+    public Task<List<ServiceLine>> AllOrdersAsync(long stayId) => Task.FromResult(new List<ServiceLine>());
+    public Task<List<ServiceLine>> InvoiceBillLinesAsync(long stayId) => Task.FromResult(new List<ServiceLine>());
+    public Task<bool> HasInvoiceBillLinesAsync(long stayId) => Task.FromResult(false);
+    public Task<List<ServiceLine>> PendingAsync() => Task.FromResult(new List<ServiceLine>());
     public Task<List<RevenueItem>> RevenueAsync(DateTime day) => RevenueAsync(day.Date,day.Date.AddDays(1));
-    public Task<List<RevenueItem>> RevenueAsync(DateTime from,DateTime until) => Query("SELECT DanhMuc,SUM(SoTien) FROM (SELECT N'Tiền phòng' DanhMuc,TienPhong SoTien FROM dbo.HoaDon i WHERE i.ThoiDiemLapHoaDon>=@p0 AND i.ThoiDiemLapHoaDon<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) UNION ALL SELECT o.DanhMuc,o.DonGia*o.SoLuong FROM dbo.YeuCauDichVu o JOIN dbo.HoaDon i ON i.MaLuotLuuTru=o.MaLuotLuuTru WHERE i.ThoiDiemLapHoaDon>=@p0 AND i.ThoiDiemLapHoaDon<@p1 AND o.ThoiDiemHuy IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) UNION ALL SELECT N'Cọc không hoàn (không đến)',SoTien FROM dbo.GiaoDichThanhToan WHERE LoaiGiaoDich='Forfeit' AND ThoiDiemTao>=@p0 AND ThoiDiemTao<@p1 UNION ALL SELECT N'Giảm trừ',-a.SoTien FROM dbo.DieuChinhHoaDon a JOIN dbo.HoaDon i ON i.Ma=a.MaHoaDon WHERE a.ThoiDiemLap>=@p0 AND a.ThoiDiemLap<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma)) q GROUP BY DanhMuc",r=>new RevenueItem(r.GetString(0),r.GetDecimal(1)),from,until);
-    public Task<List<CustomerSummary>> CustomersAsync(string search) => Query("SELECT TOP(200) c.Ma,c.Ten,c.SoDienThoai,c.SoGiayTo,COUNT(i.Ma),COALESCE(SUM(i.TienPhong+i.TienDichVu),0) FROM dbo.KhachHang c LEFT JOIN dbo.LuotLuuTru s ON s.MaKhachHang=c.Ma LEFT JOIN dbo.HoaDon i ON i.MaLuotLuuTru=s.Ma AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) WHERE @p0=N'' OR CHARINDEX(@p0,c.Ten)>0 OR CHARINDEX(@p0,c.SoDienThoai)>0 OR CHARINDEX(@p0,c.SoGiayTo)>0 GROUP BY c.Ma,c.Ten,c.SoDienThoai,c.SoGiayTo ORDER BY c.Ma DESC",r=>new CustomerSummary(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetInt32(4),r.GetDecimal(5)),search);
-    public Task<List<ServiceLine>> CustomerOrdersAsync(int customer) => Query("SELECT TOP(500) o.Ma,o.MaLuotLuuTru,o.DanhMuc,o.Ten,o.SoLuong,o.DonGia,o.ThoiDiemGoi,o.ThoiDiemGiao,o.SoLuongDaGiao,o.ThoiDiemHuy FROM dbo.YeuCauDichVu o JOIN dbo.LuotLuuTru s ON s.Ma=o.MaLuotLuuTru WHERE s.MaKhachHang=@p0 ORDER BY o.Ma DESC",MapLine,customer);
+    public Task<List<RevenueItem>> RevenueAsync(DateTime from,DateTime until) => Query("""
+        SELECT N'Tiền phòng' AS DanhMuc, COALESCE(SUM(i.TienPhong), 0) AS SoTien
+        FROM dbo.HoaDon i
+        WHERE i.ThoiDiemLapHoaDon>=@p0 AND i.ThoiDiemLapHoaDon<@p1
+        UNION ALL
+        SELECT N'Cọc không hoàn (không đến)', COALESCE(SUM(SoTien), 0)
+        FROM dbo.GiaoDichThanhToan
+        WHERE LoaiGiaoDich='Forfeit' AND ThoiDiemTao>=@p0 AND ThoiDiemTao<@p1
+        """,r=>new RevenueItem(r.GetString(0),r.GetDecimal(1)),from,until);
+    public Task<List<CustomerSummary>> CustomersAsync(string search) => Query("SELECT TOP(200) c.Ma,c.Ten,c.SoDienThoai,c.SoGiayTo,COUNT(i.Ma),COALESCE(SUM(i.TienPhong),0),c.MaHienThi FROM dbo.KhachHang c LEFT JOIN dbo.LuotLuuTru s ON s.MaKhachHang=c.Ma LEFT JOIN dbo.HoaDon i ON i.MaLuotLuuTru=s.Ma WHERE @p0=N'' OR CHARINDEX(@p0,c.Ten)>0 OR CHARINDEX(@p0,c.SoDienThoai)>0 OR CHARINDEX(@p0,c.SoGiayTo)>0 OR CHARINDEX(UPPER(@p0),c.MaHienThi)>0 GROUP BY c.Ma,c.Ten,c.SoDienThoai,c.SoGiayTo,c.MaHienThi ORDER BY c.Ma DESC",r=>new CustomerSummary(r.GetInt32(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetInt32(4),r.GetDecimal(5),r.GetString(6)),search);
+    public Task<List<ServiceLine>> CustomerOrdersAsync(int customer) => Task.FromResult(new List<ServiceLine>());
     public Task<List<Invoice>> InvoicesAsync(DateTime day) => InvoicesAsync(day.Date,day.Date.AddDays(1));
-    public Task<List<Invoice>> InvoicesAsync(DateTime from,DateTime until) => Query("SELECT Ma,MaLuotLuuTru,SoPhongHoaDon,TenKhach,ThoiDiemLapHoaDon,TienPhong,TienDichVu,TienCoc,TienDaThu,TienDaHoan,PhuongThucThanhToan FROM dbo.HoaDon i WHERE ThoiDiemLapHoaDon>=@p0 AND ThoiDiemLapHoaDon<@p1 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) ORDER BY Ma DESC",r=>new Invoice(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetDateTime(4),r.GetDecimal(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.GetString(10)),from,until);
-    public Task<List<Invoice>> CustomerInvoicesAsync(int customerId) => Query("SELECT TOP(200) i.Ma,i.MaLuotLuuTru,i.SoPhongHoaDon,i.TenKhach,i.ThoiDiemLapHoaDon,i.TienPhong,i.TienDichVu,i.TienCoc,i.TienDaThu,i.TienDaHoan,i.PhuongThucThanhToan FROM dbo.HoaDon i JOIN dbo.LuotLuuTru s ON s.Ma=i.MaLuotLuuTru WHERE s.MaKhachHang=@p0 AND NOT EXISTS(SELECT 1 FROM dbo.HoaDonHuy v WHERE v.MaHoaDon=i.Ma) ORDER BY i.Ma DESC",r=>new Invoice(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetDateTime(4),r.GetDecimal(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.GetString(10)),customerId);
+    public Task<List<Invoice>> InvoicesAsync(DateTime from,DateTime until) => Query("SELECT Ma,MaLuotLuuTru,SoPhongHoaDon,TenKhach,ThoiDiemLapHoaDon,TienPhong,TienDichVu,TienCoc,TienDaThu,TienDaHoan,PhuongThucThanhToan FROM dbo.HoaDon i WHERE ThoiDiemLapHoaDon>=@p0 AND ThoiDiemLapHoaDon<@p1 ORDER BY Ma DESC",r=>new Invoice(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetDateTime(4),r.GetDecimal(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.GetString(10)),from,until);
+    public Task<List<Invoice>> CustomerInvoicesAsync(int customerId) => Query("SELECT TOP(200) i.Ma,i.MaLuotLuuTru,i.SoPhongHoaDon,i.TenKhach,i.ThoiDiemLapHoaDon,i.TienPhong,i.TienDichVu,i.TienCoc,i.TienDaThu,i.TienDaHoan,i.PhuongThucThanhToan FROM dbo.HoaDon i JOIN dbo.LuotLuuTru s ON s.Ma=i.MaLuotLuuTru WHERE s.MaKhachHang=@p0 ORDER BY i.Ma DESC",r=>new Invoice(r.GetInt64(0),r.GetInt64(1),r.GetString(2),r.GetString(3),r.GetDateTime(4),r.GetDecimal(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.GetString(10)),customerId);
 }

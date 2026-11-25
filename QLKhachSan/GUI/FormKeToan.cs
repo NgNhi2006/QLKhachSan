@@ -13,7 +13,7 @@ internal sealed class AccountingForm : Form
     private readonly DateTimePicker through=new() {Format=DateTimePickerFormat.Custom,CustomFormat="dd/MM/yyyy"};
     private readonly TabControl tabs=new() {Dock=DockStyle.Fill};
     private readonly Dictionary<string,DataGridView> grids=[];
-    private readonly Label summary=new() {Dock=DockStyle.Fill,Font=new Font("Segoe UI",10,FontStyle.Bold),Padding=new Padding(12,6,4,0)};
+    private readonly Label summary=new() {Dock=DockStyle.Fill,Font=AppTheme.Bold,Padding=new Padding(12,6,4,0)};
     private bool loading;
 
     public AccountingForm(UserSession user, string? initialTab = null)
@@ -24,9 +24,10 @@ internal sealed class AccountingForm : Form
         var root=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=4,ColumnCount=1,Padding=new Padding(20,14,20,18),BackColor=AppTheme.Canvas};
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,82));root.RowStyles.Add(new RowStyle(SizeType.Absolute,62));
         root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,48));
-        var heading=new Panel {Dock=DockStyle.Fill,BackColor=AppTheme.Navy,Margin=new Padding(0,0,0,10)};
-        heading.Controls.Add(new Label {Text="TÀI CHÍNH  /  KẾ TOÁN",Font=AppTheme.Small,ForeColor=Color.FromArgb(223,190,137),Location=new Point(20,10),AutoSize=true});
-        heading.Controls.Add(new Label {Text="Sổ sách & đối soát",Font=AppTheme.Title,ForeColor=Color.White,Location=new Point(18,30),AutoSize=true});
+        var heading=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Margin=new Padding(0,0,0,10)};
+        heading.Paint+=(_,e)=>{using var accent=new SolidBrush(AppTheme.Focus);e.Graphics.FillRectangle(accent,20,10,44,3);};
+        heading.Controls.Add(new Label {Text="TÀI CHÍNH  /  KẾ TOÁN",Font=AppTheme.Small,ForeColor=AppTheme.Amber,Location=new Point(20,17),AutoSize=true});
+        heading.Controls.Add(new Label {Text="Sổ sách & đối soát",Font=AppTheme.Title,ForeColor=AppTheme.Navy,Location=new Point(18,37),AutoSize=true});
         root.Controls.Add(heading,0,0);
         var bar=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true,BackColor=Color.White,Padding=new Padding(12,8,8,5),Margin=new Padding(0,0,0,10)};
         bar.Controls.Add(new Label {Text="Từ",AutoSize=true,Margin=new Padding(5,10,8,0)});
@@ -37,15 +38,16 @@ internal sealed class AccountingForm : Form
         AddButton(bar,"Xuất Excel",()=>{ExcelExport.ExportGrid(this,grids[tabs.SelectedTab!.Text],tabs.SelectedTab.Text,DateTime.Now);return Task.CompletedTask;});
         root.Controls.Add(bar,0,1);root.Controls.Add(tabs,0,2);root.Controls.Add(summary,0,3);Controls.Add(root);
         tabs.Font=AppTheme.Bold;tabs.DrawMode=TabDrawMode.OwnerDrawFixed;
+        tabs.Appearance=TabAppearance.FlatButtons;
         tabs.SizeMode=TabSizeMode.Fixed;tabs.ItemSize=new Size(148,42);
         tabs.DrawItem+=(_,e)=>
         {
             var selected=e.Index==tabs.SelectedIndex;
-            using var fill=new SolidBrush(selected?Color.White:Color.FromArgb(239,241,238));
+            using var fill=new SolidBrush(selected?Color.White:Color.FromArgb(243,243,235));
             e.Graphics.FillRectangle(fill,e.Bounds);
             if(selected)
             {
-                using var accent=new Pen(AppTheme.Amber,3);
+                using var accent=new Pen(AppTheme.Blue,3);
                 e.Graphics.DrawLine(accent,e.Bounds.Left+10,e.Bounds.Bottom-2,e.Bounds.Right-10,e.Bounds.Bottom-2);
             }
             TextRenderer.DrawText(e.Graphics,tabs.TabPages[e.Index].Text,AppTheme.Bold,e.Bounds,
@@ -54,13 +56,7 @@ internal sealed class AccountingForm : Form
         };
         summary.BackColor=Color.White;summary.ForeColor=AppTheme.Ink;
         if(FunctionPolicy.Can(user,"shift.manage"))AddTab("Ca trực",BuildShiftTab);
-        if(FunctionPolicy.Can(user,"cash.book"))AddTab("Sổ quỹ",BuildVoucherTab);
-        if(FunctionPolicy.Can(user,"cash.bank"))AddTab("Đối soát ngân hàng",BuildBankTab);
-        if(FunctionPolicy.Can(user,"cash.debt"))AddTab("Công nợ",BuildDebtTab);
-        if(FunctionPolicy.Can(user,"service.stock"))AddTab("Kho minibar",BuildStockTab);
-        if(FunctionPolicy.Can(user,"invoice.control"))AddTab("Hóa đơn",BuildInvoiceTab);
-        if(FunctionPolicy.Can(user,"invoice.groups"))AddTab("Nhóm bill",BuildBillGroupTab);
-        if(FunctionPolicy.Can(user,"report.profit"))AddTab("Lãi lỗ",BuildProfitTab);
+        if(FunctionPolicy.Can(user,"invoice.control") || FunctionPolicy.Can(user,"invoice.list"))AddTab("Hóa đơn",BuildInvoiceTab);
         if(initialTab is not null && tabs.TabPages.Cast<TabPage>().FirstOrDefault(x=>x.Text==initialTab) is { } selected)
             tabs.SelectedTab=selected;
         Shown+=async (_,_)=>await RefreshAll();
@@ -68,7 +64,8 @@ internal sealed class AccountingForm : Form
     private void AddTab(string title,Action<FlowLayoutPanel> actions)
     {
         var page=new TabPage(title) {BackColor=AppTheme.Canvas,Padding=new Padding(12)};
-        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=2,ColumnCount=1,BackColor=AppTheme.Canvas};
+        var layout=new RoundedSurface {Dock=DockStyle.Fill,RowCount=2,ColumnCount=1,
+            BackColor=Color.White,Padding=new Padding(12)};
         layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,90));
         var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.DisplayedCells;
         var footer=new FlowLayoutPanel {Dock=DockStyle.Fill,AutoScroll=true,WrapContents=true,BackColor=Color.White,Padding=new Padding(10,12,8,8),Margin=new Padding(0,10,0,0)};
@@ -95,44 +92,21 @@ internal sealed class AccountingForm : Form
             summary.Text=$"Đang xem: {tabs.SelectedTab?.Text}";
             if(grids.ContainsKey("Ca trực"))
             {
-                var shifts=await service.CashShiftsAsync(from.Value,through.Value);
-                Bind("Ca trực",shifts.Select(x=>new {x.Id,NhânViên=x.Cashier,MởCa=x.OpenedAt,ĐóngCa=x.ClosedAt,TrạngThái=x.Status switch {"Open"=>"Đang mở","Submitted"=>"Đã bàn giao","Locked"=>"Đã khóa",_=>x.Status},ĐầuCa=x.OpeningCash,ThuTiềnMặt=x.CashIn,ChiTiềnMặt=x.CashOut,POS=x.Pos,ChuyểnKhoản=x.Bank,OTA=x.Ota,LýThuyết=x.ExpectedCash,ThựcĐếm=x.CountedCash,ChênhLệch=x.Status=="Open"?null:(decimal?)x.Discrepancy,GiảiTrình=x.Explanation}).ToList());
-            }
-            if(grids.ContainsKey("Sổ quỹ"))
-            {
-                var vouchers=await service.VouchersAsync(from.Value,through.Value);
-                Bind("Sổ quỹ",vouchers.Select(x=>new {x.Id,Ngày=x.PostedAt,Loại=x.Type,Kênh=x.Channel,HạngMục=x.Category,SốTiền=x.Amount,ĐốiTượng=x.Counterparty,MãGiaoDịch=x.Reference,DiễnGiải=x.Note,NhânViên=x.Username,Hủy=x.Reversed}).ToList());
-                var book=await service.BookAsync("Cash",from.Value,through.Value);
-                var bankBook=await service.BookAsync("Bank",from.Value,through.Value);
-                summary.Text=$"Quỹ tiền mặt: {book.Closing:N0} VNĐ  |  Ngân hàng: {bankBook.Closing:N0} VNĐ";
-            }
-            if(grids.ContainsKey("Đối soát ngân hàng"))
-            {
-                var bankLines=await service.BankLinesAsync(from.Value,through.Value);
-                Bind("Đối soát ngân hàng",bankLines.Select(x=>new {x.Id,Ngày=x.OccurredAt,Kênh=x.Channel,MãGiaoDịch=x.Reference,SốTiền=x.Amount,ThanhToán=x.PaymentId,Phiếu=x.VoucherId,x.Status}).ToList());
-            }
-            if(grids.ContainsKey("Công nợ"))
-            {
-                var debts=await service.DebtsAsync();
-                Bind("Công nợ",debts.Select(x=>new {x.Id,Loại=x.Type,ĐốiTượng=x.Counterparty,HóaĐơn=x.InvoiceId,NgàyGhi=x.IssuedAt,Hạn=x.DueAt,SốGốc=x.Amount,ĐãTrả=x.Paid,CònLại=x.Outstanding,TuổiNợ=x.AgeBucket(DateTime.Today),DiễnGiải=x.Note}).ToList());
-            }
-            if(grids.ContainsKey("Kho minibar"))
-            {
-                var stock=await service.StockAsync();var reconciliation=await service.ReconcileMinibarAsync(from.Value,through.Value);
-                Bind("Kho minibar",stock.Select(x=>new {x.Id,DịchVụ=x.ServiceId,Tên=x.Name,ĐơnVị=x.Unit,Tồn=x.Quantity,GiáVốnBìnhQuân=x.AverageCost,NgưỡngNhập=x.ReorderLevel,CảnhBáo=x.Quantity<=x.ReorderLevel,BánTrênBill=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.Billed??0,BuồngPhòngBáo=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.Housekeeping??0,XuấtKhoBán=reconciliation.FirstOrDefault(r=>r.Item==x.Name)?.BookSold??0}).ToList());
+                try
+                {
+                    var shifts=await service.CashShiftsAsync(from.Value,through.Value);
+                    Bind("Ca trực",shifts.Select(x=>new {x.Id,NhânViên=x.Cashier,MởCa=x.OpenedAt,ĐóngCa=x.ClosedAt,TrạngThái=x.Status switch {"Open"=>"Đang mở","Submitted"=>"Đã bàn giao","Locked"=>"Đã khóa",_=>x.Status},ĐầuCa=x.OpeningCash,ThuTiềnMặt=x.CashIn,ChiTiềnMặt=x.CashOut,POS=x.Pos,ChuyểnKhoản=x.Bank,OTA=x.Ota,LýThuyết=x.ExpectedCash,ThựcĐếm=x.CountedCash,ChênhLệch=x.Status=="Open"?null:(decimal?)x.Discrepancy,GiảiTrình=x.Explanation}).ToList());
+                }
+                catch (Exception ex) { Ui.Error(this, ex); }
             }
             if(grids.ContainsKey("Hóa đơn"))
             {
-                var report=await service.AllFinanceInvoicesAsync(from.Value,through.Value);
-                var controls=(await service.InvoiceControlsAsync(from.Value,through.Value)).ToDictionary(x=>x.Id);
-                Bind("Hóa đơn",report.Select(x=>new {x.Id,Ngày=x.Issued,Phòng=x.Room,Khách=x.Guest,TiềnPhòng=x.RoomCharge,DịchVụ=x.ServiceCharge,Tổng=x.Total,Cọc=x.Deposit,ThuThêm=x.Collected,Hoàn=x.Refunded,Kênh=x.Method,TrạngThái=controls[x.Id].Voided?"Đã hủy":"Có hiệu lực",GiảmTrừ=controls[x.Id].Adjustments,VAT=controls[x.Id].VatRate,PhíPhụcVụ=controls[x.Id].ServiceRate,HóaĐơnĐiệnTử=controls[x.Id].EInvoiceNumber}).ToList());
-            }
-            if(grids.ContainsKey("Nhóm bill"))
-                Bind("Nhóm bill",(await service.BillSharesAsync()).Select(x=>new {MãNhóm=x.GroupId,Đoàn=x.GroupName,HóaĐơn=x.InvoiceId,NgườiTrả=x.Payer,SốTiền=x.Amount,NgàyTạo=x.CreatedAt}).ToList());
-            if(grids.ContainsKey("Lãi lỗ"))
-            {
-                var pnl=await service.FinanceSummaryAsync(from.Value,through.Value);
-                Bind("Lãi lỗ",new[]{new {DoanhThuPhòng=pnl.RoomRevenue,Minibar=pnl.MinibarRevenue,DịchVụKhác=pnl.OtherRevenue,GiảmTrừ=pnl.Discounts,DoanhThuThuần=pnl.NetRevenue,GiáVốn=pnl.CostOfGoods,ChiPhíVậnHành=pnl.OperatingExpenses,LợiNhuậnGộp=pnl.GrossProfit,PhòngĐêmBán=pnl.RoomNightsSold,PhòngĐêmSẵnCó=pnl.RoomNightsAvailable,ADR=pnl.Adr,RevPAR=pnl.RevPar,LấpĐầyPhầnTrăm=pnl.Occupancy}}.ToList());
+                try
+                {
+                    var invoices = await service.AllFinanceInvoicesAsync(from.Value, through.Value);
+                    Bind("Hóa đơn", invoices.Select(x => new { Mã = x.Id, Phòng = x.Room, Khách = x.Guest, NgàyLập = x.Issued, TiềnPhòng = x.RoomCharge, TiềnDịchVụ = x.ServiceCharge, TiềnCọc = x.Deposit, ThựcThu = x.Collected, Hoàn = x.Refunded, TổngTiền = x.Total, HìnhThức = x.Method }).ToList());
+                }
+                catch (Exception ex) { Ui.Error(this, ex); }
             }
         }
         catch(Exception ex){Ui.Error(this,ex);}finally{loading=false;}
@@ -168,12 +142,6 @@ internal sealed class AccountingForm : Form
             {
                 using var d=Dialog("Duyệt và khóa ca");var id=Ui.Number(int.MaxValue);d.Add("Mã ca đã bàn giao",id);
                 d.Action("KHÓA CA",async()=>{await service.LockCashShiftAsync((long)id.Value);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
-            });
-            AddButton(actions,"Khóa kỳ tháng",()=>
-            {
-                using var d=Dialog("Khóa kỳ kế toán");var month=Ui.DatePicker(DateTime.Today.AddMonths(-1));var note=Ui.Text(300);
-                d.Add("Tháng cần khóa",month);d.Add("Ghi chú",note);
-                d.Action("KHÓA KỲ",async()=>{await service.LockAccountingPeriodAsync(month.Value,note.Text);await RefreshAll();});d.ShowDialog(this);return Task.CompletedTask;
             });
         }
         AddButton(actions,"In biên bản ca",()=>{PrintSelected("Ca trực");return Task.CompletedTask;});
@@ -235,14 +203,22 @@ internal sealed class AccountingForm : Form
     }
     private void BuildStockTab(FlowLayoutPanel actions)
     {
-        AddButton(actions,"Thêm mặt hàng",async()=>
+        AddButton(actions,"Thêm hàng khác",async()=>
         {
             var services=await service.StockLinkableServicesAsync();
             using var d=Dialog("Mặt hàng kho");var name=Ui.Text(150);var unit=Ui.Text(30);
             var choices=new[]{new Choice("","Không liên kết dịch vụ")}
                 .Concat(services.Select(x=>new Choice(x.Id.ToString(),$"{x.Category} / {x.Name}"))).ToArray();
-            var linkedService=Ui.Combo(choices);var reorder=Ui.Money();
-            d.Add("Tên mặt hàng",name);d.Add("Đơn vị",unit);d.Add("Dịch vụ liên kết (nếu có)",linkedService);d.Add("Ngưỡng cảnh báo nhập thêm",reorder);
+            var linkedService=Ui.Combo(choices);var reorder=Ui.StockQuantity(0,true);
+            linkedService.SelectedIndexChanged+=(_,_)=>
+            {
+                var code=((Choice?)linkedService.SelectedItem)?.Code;
+                if(!int.TryParse(code,out var id))return;
+                var selectedService=services.First(x=>x.Id==id);
+                name.Text=selectedService.Name;
+                unit.Text=selectedService.Name.Contains("xe máy",StringComparison.CurrentCultureIgnoreCase)?"xe":selectedService.Unit;
+            };
+            d.Add("Tên mặt hàng",name);d.Add("Đơn vị đếm tồn (xe, chai, gói...)",unit);d.Add("Dịch vụ liên kết (nếu có)",linkedService);d.Add("Ngưỡng cảnh báo nhập thêm",reorder);
             d.Action("LƯU",async()=>{var code=((Choice)linkedService.SelectedItem!).Code;
                 await service.AddStockItemAsync(name.Text,unit.Text,code.Length==0?null:int.Parse(code),reorder.Value);await RefreshAll();});d.ShowDialog(this);
         });
@@ -250,21 +226,35 @@ internal sealed class AccountingForm : Form
         {
             var stock=await service.StockAsync();if(stock.Count==0)throw new BusinessException("Hãy thêm mặt hàng trước khi nhập hoặc xuất kho.");
             using var d=Dialog("Biến động kho");var item=Ui.Combo(stock.Select(x=>new Choice(x.Id.ToString(),$"{x.Name} · tồn {x.Quantity:N0} {x.Unit}")).ToArray());
-            var kind=Ui.Combo(new[]{new Choice("Purchase","Nhập mua"),new Choice("Spoilage","Xuất hủy/hư hỏng"),new Choice("Internal","Xuất dùng nội bộ"),new Choice("Adjustment","Điều chỉnh tăng tồn")});var quantity=Ui.Money();var cost=Ui.Money();var reason=Ui.Text(500);
-            d.Add("Mặt hàng",item);d.Add("Loại giao dịch",kind);d.Add("Số lượng",quantity);d.Add("Đơn giá vốn (khi nhập mua)",cost);d.Add("Lý do",reason);
-            d.Action("GHI KHO",async()=>{await service.MoveStockAsync(int.Parse(((Choice)item.SelectedItem!).Code),((Choice)kind.SelectedItem!).Code,quantity.Value,cost.Value,reason.Text);await RefreshAll();});d.ShowDialog(this);
+            var kind=Ui.Combo(new[]{new Choice("Purchase","Nhập mua"),new Choice("Spoilage","Xuất hủy/hư hỏng"),new Choice("Internal","Xuất dùng nội bộ"),new Choice("Adjustment","Điều chỉnh tăng tồn")});var quantity=Ui.Text(30);quantity.Text="1";var cost=Ui.Money();var reason=Ui.Text(500);
+            d.Add("Mặt hàng",item);d.Add("Loại giao dịch",kind);d.Add("Số lượng (11,000 = 11 nghìn)",quantity);d.Add("Đơn giá vốn (khi nhập mua)",cost);d.Add("Lý do",reason);
+            var preview=new Label {AutoSize=true,ForeColor=AppTheme.Blue,Font=AppTheme.Bold};
+            void UpdatePreview()
+            {
+                try{preview.Text=$"Sẽ ghi kho: {Ui.ParseStockQuantity(quantity.Text):#,##0.###} đơn vị";}
+                catch(BusinessException){preview.Text="Số lượng chưa hợp lệ";}
+            }
+            quantity.TextChanged+=(_,_)=>UpdatePreview();UpdatePreview();d.Add("KIỂM TRA SỐ LƯỢNG",preview);
+            d.Action("GHI KHO",async()=>{await service.MoveStockAsync(int.Parse(((Choice)item.SelectedItem!).Code),((Choice)kind.SelectedItem!).Code,Ui.ParseStockQuantity(quantity.Text),cost.Value,reason.Text);await RefreshAll();});d.ShowDialog(this);
         });
         AddButton(actions,"Buồng phòng báo dùng",async()=>
         {
             var stock=await service.StockAsync();if(stock.Count==0)throw new BusinessException("Kho chưa có mặt hàng.");
             using var d=Dialog("Báo tiêu thụ buồng phòng");var item=Ui.Combo(stock.Select(x=>new Choice(x.Id.ToString(),$"{x.Name} · tồn {x.Quantity:N0} {x.Unit}")).ToArray());
-            var stay=Ui.Text(30);var quantity=Ui.Money();var note=Ui.Text(300);
+            var stay=Ui.Text(30);var quantity=Ui.Text(30);quantity.Text="1";var note=Ui.Text(300);
             d.Add("Mặt hàng",item);d.Add("Mã lượt ở (để trống nếu chưa xác định)",stay);d.Add("Số lượng",quantity);d.Add("Ghi chú",note);
-            d.Action("BÁO DÙNG",async()=>{long? id=string.IsNullOrWhiteSpace(stay.Text)?null:long.Parse(stay.Text);await service.ReportHousekeepingAsync(int.Parse(((Choice)item.SelectedItem!).Code),id,quantity.Value,note.Text);await RefreshAll();});d.ShowDialog(this);
+            d.Action("BÁO DÙNG",async()=>{long? id=string.IsNullOrWhiteSpace(stay.Text)?null:long.Parse(stay.Text);await service.ReportHousekeepingAsync(int.Parse(((Choice)item.SelectedItem!).Code),id,Ui.ParseStockQuantity(quantity.Text),note.Text);await RefreshAll();});d.ShowDialog(this);
         });
     }
     private void BuildInvoiceTab(FlowLayoutPanel actions)
     {
+        if (!FunctionPolicy.Can(user,"invoice.control")) return;
+        AddButton(actions,"Mã giảm giá",()=>
+        {
+            using var manager=new DiscountCodesForm(service);
+            manager.ShowDialog(this);
+            return Task.CompletedTask;
+        });
         AddButton(actions,"Giảm trừ",()=>
         {
             using var d=Dialog("Phê duyệt giảm trừ");var id=Ui.Number(int.MaxValue);var kind=Ui.Combo(new[]{new Choice("ServiceFailure","Dịch vụ kém"),new Choice("VIP","Khách VIP"),new Choice("Voucher","Voucher")});var amount=Ui.Money();var reason=Ui.Text(500);

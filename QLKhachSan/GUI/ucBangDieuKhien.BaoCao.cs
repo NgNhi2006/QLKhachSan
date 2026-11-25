@@ -9,6 +9,11 @@ public partial class ucDashboard
     private async Task ShowCheckout(Stay stay)
     {
         var bill=await service.QuoteAsync(stay);
+        if(navigationReady)
+        {
+            ShowCheckoutWorkspace(stay,bill);
+            return;
+        }
         var screen=Screen.FromControl(this).WorkingArea;
         using var dialog=new InputDialog($"Thanh toán P.{bill.Room.Number}",900,Math.Min(760,screen.Height-40))
         {
@@ -16,47 +21,73 @@ public partial class ucDashboard
             MaximumSize=new Size(Math.Min(1000,screen.Width-40),screen.Height-40)
         };
         var settings=AppSettings.Load();
-        var billPanel=new RoundedSurface {Height=360,ColumnCount=2,RowCount=1,
+        var billPanel=new RoundedSurface {Height=420,ColumnCount=2,RowCount=1,
             BackColor=Color.White,Padding=new Padding(10),Margin=new Padding(0,0,0,14)};
         billPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        billPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,0));
+        billPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,290));
         billPanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         var invoice=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,Padding=new Padding(8)};
         invoice.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        foreach(var height in new[]{34,27,48,130,75})invoice.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
+        foreach(var height in new[]{38,29,60,170,85})invoice.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
         invoice.Controls.Add(new Label {Text=settings.HotelName.ToUpperInvariant(),Dock=DockStyle.Fill,Font=AppTheme.Title,ForeColor=AppTheme.Ink},0,0);
-        invoice.Controls.Add(new Label {Text=$"PHIẾU THANH TOÁN  •  P.{bill.Room.Number}",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=Color.FromArgb(177,75,59)},0,1);
+        invoice.Controls.Add(new Label {Text=$"PHIẾU THANH TOÁN  •  P.{bill.Room.Number}",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Amber},0,1);
         invoice.Controls.Add(new Label {Text=$"Khách: {stay.Guest}  •  SĐT: {stay.Phone}\nNhận: {stay.CheckIn:dd/MM/yyyy HH:mm}  •  Tính đến: {bill.At:dd/MM/yyyy HH:mm}",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},0,2);
         var lines=new ListView {Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,
             GridLines=false,BorderStyle=BorderStyle.None,Font=AppTheme.Body,
-            HeaderStyle=ColumnHeaderStyle.Nonclickable,BackColor=Color.FromArgb(248,250,254)};
+            HeaderStyle=ColumnHeaderStyle.Nonclickable,BackColor=Color.FromArgb(250,249,245)};
         lines.Columns.Add("HẠNG MỤC",180);lines.Columns.Add("SL",45,HorizontalAlignment.Right);
         lines.Columns.Add("ĐƠN GIÁ",100,HorizontalAlignment.Right);lines.Columns.Add("THÀNH TIỀN",110,HorizontalAlignment.Right);
         void AddLine(string name,string quantity,string price,decimal total)
         {
             var row=new ListViewItem(name);row.SubItems.Add(quantity);row.SubItems.Add(price);row.SubItems.Add($"{total:N0} đ");lines.Items.Add(row);
         }
-        AddLine("Tiền phòng","1","",bill.RoomCharge);
+        AddLine("Tiền phòng",$"{BilledRoomDays(bill)} ngày","",bill.RoomCharge);
         foreach(var line in bill.Lines.Where(x=>x.Cancelled is null))AddLine(line.Name,line.Quantity.ToString(),$"{line.Price:N0} đ",line.Total);
         invoice.Controls.Add(lines,0,3);
         invoice.Controls.Add(new Label {Text=$"Tổng hóa đơn: {bill.Total:N0} đ    •    Cọc đã thu: {stay.Deposit:N0} đ\n{(bill.ToCollect>0?$"CẦN THU: {bill.ToCollect:N0} đ":$"CẦN HOÀN: {bill.ToRefund:N0} đ")}\nBảng tính có hiệu lực 10 phút.",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink,TextAlign=ContentAlignment.MiddleRight},0,4);
         billPanel.Controls.Add(invoice,0,0);
+        var paymentSide=new RoundedSurface {Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,
+            Padding=new Padding(14),Margin=new Padding(6,0,0,0),BackColor=Color.FromArgb(246,248,242)};
+        paymentSide.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Absolute,36));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Absolute,45));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Absolute,34));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Absolute,45));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Absolute,64));
+        paymentSide.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        paymentSide.Controls.Add(new Label {Text="PHƯƠNG THỨC THANH TOÁN",Dock=DockStyle.Fill,
+            Font=AppTheme.Bold,ForeColor=AppTheme.Navy,TextAlign=ContentAlignment.MiddleLeft},0,0);
+        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS","Công nợ OTA"});
+        method.Dock=DockStyle.Fill;method.Margin=new Padding(0,3,0,9);paymentSide.Controls.Add(method,0,1);
+        paymentSide.Controls.Add(new Label {Text="MÃ GIAO DỊCH / THAM CHIẾU",Dock=DockStyle.Fill,
+            Font=AppTheme.Small,ForeColor=AppTheme.Muted,TextAlign=ContentAlignment.MiddleLeft},0,2);
+        var reference=Ui.Text(100);reference.Dock=DockStyle.Fill;reference.Margin=new Padding(0,3,0,9);
+        paymentSide.Controls.Add(reference,0,3);
+        var amountSummary=new Label {Text=$"{(bill.ToCollect>0?"CẦN THU":"CẦN HOÀN")}\n{(bill.ToCollect>0?bill.ToCollect:bill.ToRefund):N0} đ",
+            Dock=DockStyle.Fill,Font=AppTheme.TextFont(15F,FontStyle.Bold),ForeColor=AppTheme.Blue,
+            TextAlign=ContentAlignment.MiddleLeft};paymentSide.Controls.Add(amountSummary,0,4);
         var bank=new RoundedSurface {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,
-            Padding=new Padding(12),BackColor=Color.FromArgb(239,245,255)};
+            Padding=new Padding(8),BackColor=Color.FromArgb(237,244,233)};
         bank.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        bank.RowStyles.Add(new RowStyle(SizeType.Absolute,32));bank.RowStyles.Add(new RowStyle(SizeType.Absolute,88));bank.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-        bank.Controls.Add(new Label {Text="QUÉT QR CHUYỂN KHOẢN",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink},0,0);
-        var bankInfo=new Label {Dock=DockStyle.Fill,ForeColor=AppTheme.Ink};bank.Controls.Add(bankInfo,0,1);
+        bank.RowStyles.Add(new RowStyle(SizeType.Absolute,24));bank.RowStyles.Add(new RowStyle(SizeType.Absolute,62));bank.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        bank.Controls.Add(new Label {Text="QUÉT QR CHUYỂN KHOẢN",Dock=DockStyle.Fill,Font=AppTheme.Small,ForeColor=AppTheme.Ink},0,0);
+        var bankInfo=new Label {Dock=DockStyle.Fill,ForeColor=AppTheme.Ink,Font=AppTheme.Small};bank.Controls.Add(bankInfo,0,1);
         var qr=new PictureBox {Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.White};bank.Controls.Add(qr,0,2);
-        billPanel.Controls.Add(bank,1,0);
+        var paymentExtra=new Panel {Dock=DockStyle.Fill,BackColor=paymentSide.BackColor};
+        var paymentHint=new Label {Text="Kiểm tra số tiền và chọn phương thức trước khi hoàn tất thanh toán.",
+            Dock=DockStyle.Fill,Font=AppTheme.Body,ForeColor=AppTheme.Muted,
+            Padding=new Padding(2,20,4,0)};
+        paymentExtra.Controls.Add(paymentHint);paymentExtra.Controls.Add(bank);
+        paymentSide.Controls.Add(paymentExtra,0,5);
+        billPanel.Controls.Add(paymentSide,1,0);
         dialog.Add("",billPanel);
-        var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS","Công nợ OTA"});var reference=Ui.Text(100);dialog.Add("Phương thức thanh toán / hoàn tiền",method);dialog.Add("Mã giao dịch QR/POS/OTA",reference);
         void UpdatePayment()
         {
             var transfer=(string?)method.SelectedItem=="Chuyển khoản" && bill.ToCollect>0;
             if(transfer && string.IsNullOrWhiteSpace(reference.Text))reference.Text=$"KS-{stay.Id}";
             bank.Visible=transfer;
-            billPanel.ColumnStyles[1].Width=transfer?315:0;
+            paymentHint.Visible=!transfer;
+            reference.Enabled=(string?)method.SelectedItem!="Tiền mặt";
             if(!transfer){qr.CancelAsync();return;}
             bankInfo.Text=$"{settings.BankAccountName}\nSTK: {settings.BankAccount}\nSố tiền: {bill.ToCollect:N0} đ\nNội dung: {reference.Text}";
             if(string.IsNullOrWhiteSpace(settings.BankCode) || string.IsNullOrWhiteSpace(settings.BankAccount) || string.IsNullOrWhiteSpace(settings.BankAccountName))
@@ -79,14 +110,12 @@ public partial class ucDashboard
         {
             if(!confirm.Checked)throw new BusinessException("Cần xác nhận đã hoàn tất thu/hoàn tiền.");
             long invoiceId=0;
-            await Changed(async()=>invoiceId=await service.CheckoutAsync(bill,(string)method.SelectedItem!,reference.Text));
-            MessageBox.Show(dialog,$"Đã lưu hóa đơn #{invoiceId}. Phòng chuyển sang đang dọn.","Hoàn tất");
+            var paidMethod=(string)method.SelectedItem!;
+            var paidReference=reference.Text;
+            await Changed(async()=>invoiceId=await service.CheckoutAsync(bill,paidMethod,paidReference));
+            ShowCheckoutReceipt(invoiceId,bill,paidMethod,paidReference,dialog);
+            dialog.Close();
         });
-        if(data.Stays.Count(x=>x.CustomerId==stay.CustomerId && x.Status==StayStatus.Occupied)>1)
-            dialog.Action("THANH TOÁN CÁC PHÒNG CÙNG KHÁCH",async()=>
-            {
-                if(await ShowGroupCheckout(stay))dialog.Close();
-            },false);
         dialog.AcceptButton=checkoutAction;
         dialog.ShowDialog(this);
     }
@@ -103,7 +132,7 @@ public partial class ucDashboard
         heading.Controls.Add(new Label {Text="Tra cứu khách và xem lịch sử dịch vụ, hóa đơn",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},0,1);root.Controls.Add(heading,0,0);
         var searchRow=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1,Margin=new Padding(0,0,0,12)};
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,140));
-        var search=Ui.Text();search.PlaceholderText="Tìm theo họ tên, số điện thoại hoặc CCCD / hộ chiếu";search.Dock=DockStyle.Fill;
+        var search=Ui.Text();search.PlaceholderText="Tìm theo mã khách, họ tên, số điện thoại hoặc CCCD / hộ chiếu";search.Dock=DockStyle.Fill;
         var searchButton=new Button {Text="TÌM KHÁCH",Dock=DockStyle.Fill,Margin=new Padding(8,0,0,0)};AppTheme.Button(searchButton,true);
         searchRow.Controls.Add(search,0,0);searchRow.Controls.Add(searchButton,1,0);root.Controls.Add(searchRow,0,1);
         var grid=Ui.Grid();grid.Dock=DockStyle.Fill;grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;
@@ -121,13 +150,14 @@ public partial class ucDashboard
         {
             var customers=await service.CustomersAsync(search.Text);
             grid.DataSource=customers;
-            var headers=new Dictionary<string,string>{{"Name","Họ tên"},{"Phone","SĐT"},{"Identity","CCCD/Hộ chiếu"},{"Visits","Lượt đã thanh toán"},{"Total","Tổng chi"}};
+            var headers=new Dictionary<string,string>{{"Code","Mã khách hàng"},{"Name","Họ tên"},{"Phone","SĐT"},{"Identity","CCCD/Hộ chiếu"},{"Visits","Lượt đã thanh toán"},{"Total","Tổng chi"}};
             foreach(DataGridViewColumn col in grid.Columns)
             {
                 if(col.Name=="Id")col.Visible=false;
                 if(headers.TryGetValue(col.Name,out var header))col.HeaderText=header;
                 if(col.Name=="Total")col.DefaultCellStyle.Format="N0";
             }
+            if(grid.Columns["Code"] is { } customerCode)customerCode.DisplayIndex=0;
             if(grid.Columns["Name"] is { } name)name.FillWeight=130;
             if(grid.Columns["Visits"] is { } visits)visits.FillWeight=80;
         }
@@ -306,7 +336,8 @@ public partial class ucDashboard
             {
                 if(grid.CurrentRow?.DataBoundItem is not Invoice invoice)throw new BusinessException("Chọn hóa đơn đã thanh toán.");
                 var stay=await service.InvoiceStayAsync(invoice.StayId);var lines=await service.InvoiceOrdersAsync(invoice.StayId);
-                PrintInvoice(invoice,stay,lines);
+                var discount=await service.InvoiceDiscountAsync(invoice.Id);
+                PrintInvoice(invoice,stay,lines,discount);
             }
             catch(Exception ex){Ui.Error(dialog,ex);}
             finally{print.Enabled=true;}
@@ -315,7 +346,7 @@ public partial class ucDashboard
     }
     private async Task ShowAccounts()
     {
-        using var dialog=new Form {Text=FunctionPolicy.Can(user,"staff.manage")?"Tài khoản cá nhân và phân quyền":"Tài khoản cá nhân",Size=new Size(920,680),MinimumSize=new Size(720,560),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
+        using var dialog=new Form {Text="Nhân viên & phân quyền",Size=new Size(1020,720),MinimumSize=new Size(760,580),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
         var root=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};
         root.RowStyles.Add(new RowStyle(SizeType.Absolute,82));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));dialog.Controls.Add(root);
         var heading=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(24,12,20,8)};
@@ -324,7 +355,6 @@ public partial class ucDashboard
         var tabs=new TabControl {Dock=DockStyle.Fill,Margin=new Padding(18,14,18,16),Font=AppTheme.Bold};root.Controls.Add(tabs,0,1);
         var myProfile=await auth.ProfileAsync(user,user.Id);
         var profileTab=new TabPage("Hồ sơ của tôi") {BackColor=AppTheme.Canvas,Padding=new Padding(22)};
-        tabs.TabPages.Add(profileTab);
         var profileCard=new RoundedSurface {Dock=DockStyle.Top,Height=208,ColumnCount=2,RowCount=2,
             BackColor=Color.White,Padding=new Padding(20)};
         profileCard.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,108));
@@ -357,7 +387,7 @@ public partial class ucDashboard
         };
         if(FunctionPolicy.Can(user,"system.password"))
         {
-        var personal=new TabPage("Mật khẩu của tôi") {BackColor=Color.White,Padding=new Padding(22,20,22,18)};tabs.TabPages.Add(personal);
+        var personal=new TabPage("Mật khẩu của tôi") {BackColor=Color.White,Padding=new Padding(22,20,22,18)};
         var personalFields=new TableLayoutPanel {Dock=DockStyle.Top,Height=300,ColumnCount=1,RowCount=8};
         personalFields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         foreach(var height in new[]{32,28,40,28,40,28,40,64})personalFields.RowStyles.Add(new RowStyle(SizeType.Absolute,height));personal.Controls.Add(personalFields);
@@ -386,7 +416,9 @@ public partial class ucDashboard
         }
         if(FunctionPolicy.Can(user,"staff.manage"))
         {
-            var permissions=new TabPage("Nhân viên và phân quyền") {BackColor=Color.White,Padding=new Padding(18,16,18,14)};tabs.TabPages.Add(permissions);
+            var permissions=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(18,16,18,14)};
+            root.Controls.Remove(tabs);
+            root.Controls.Add(permissions,0,1);
             var layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=5};
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute,32));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute,32));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,72));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,54));permissions.Controls.Add(layout);
@@ -400,12 +432,13 @@ public partial class ucDashboard
             editor.Controls.Add(new Label {Text="Trạng thái",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},1,0);
             var editRole=Ui.Combo(RolePolicy.Roles);editRole.Dock=DockStyle.Fill;editor.Controls.Add(editRole,0,1);
             var active=new CheckBox {Text="Cho phép đăng nhập",Checked=true,Dock=DockStyle.Fill,Padding=new Padding(18,0,0,0)};editor.Controls.Add(active,1,1);
-            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,RowCount=1};
-            for(var i=0;i<4;i++)actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));layout.Controls.Add(actions,0,4);
+            var actions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=5,RowCount=1};
+            for(var i=0;i<5;i++)actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,20));layout.Controls.Add(actions,0,4);
             var save=new Button {Text="LƯU VAI TRÒ",Dock=DockStyle.Fill,Margin=new Padding(0,6,4,0)};AppTheme.Button(save,true);actions.Controls.Add(save,0,0);
             var functionPermissions=new Button {Text="PHÂN QUYỀN",Dock=DockStyle.Fill,Margin=new Padding(4,6,4,0)};AppTheme.Button(functionPermissions);actions.Controls.Add(functionPermissions,1,0);
             var resetPassword=new Button {Text="ĐỔI MẬT KHẨU",Dock=DockStyle.Fill,Margin=new Padding(4,6,4,0)};AppTheme.Button(resetPassword);actions.Controls.Add(resetPassword,2,0);
-            var editProfile=new Button {Text="TÊN / ẢNH",Dock=DockStyle.Fill,Margin=new Padding(4,6,0,0)};AppTheme.Button(editProfile);actions.Controls.Add(editProfile,3,0);
+            var editProfile=new Button {Text="HỒ SƠ",Dock=DockStyle.Fill,Margin=new Padding(4,6,4,0)};AppTheme.Button(editProfile);actions.Controls.Add(editProfile,3,0);
+            var createAccount=new Button {Text="+ TẠO TÀI KHOẢN",Dock=DockStyle.Fill,Margin=new Padding(4,6,0,0)};AppTheme.Button(createAccount,true);actions.Controls.Add(createAccount,4,0);
             UserInfo Selected()=>grid.CurrentRow?.DataBoundItem as UserInfo??throw new BusinessException("Chọn tài khoản.");
             void ShowSelection()
             {
@@ -428,6 +461,11 @@ public partial class ucDashboard
                 ShowSelection();
             }
             grid.SelectionChanged+=(_,_)=>ShowSelection();
+            createAccount.Click+=async (_,_)=>
+            {
+                try { await ShowRegisterAccount(); await LoadRows(); }
+                catch(Exception ex) { Ui.Error(dialog,ex); }
+            };
             editProfile.Click+=async (_,_)=>
             {
                 try
@@ -467,7 +505,8 @@ public partial class ucDashboard
                     for(var i=0;i<available.Length;i++)
                     {
                         var item=available[i];
-                        var menuName=MainMenus.Single(x=>x.Code==item.Menu).Title;
+                        var menuCode=item.Menu is "cash" or "invoices" or "reports" ? "finance" : item.Menu=="system" ? "staff" : item.Menu;
+                        var menuName=MainMenus.FirstOrDefault(x=>x.Code==menuCode)?.Title??item.Menu;
                         list.Items.Add($"{menuName}  ›  {item.Submenu}  ›  {item.Name}",granted.Contains(item.Code));
                     }
                     grantRoot.Controls.Add(list,0,1);

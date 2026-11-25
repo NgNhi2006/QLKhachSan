@@ -79,20 +79,35 @@ public partial class ucDashboard
             qrForm.FormClosed+=(_,_)=>picture.CancelAsync();
             qrForm.ShowDialog(form);
         };
-        var buttons=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=1,Padding=new Padding(0,8,0,0)};
+        var buttons=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,RowCount=1,Padding=new Padding(0,8,0,0)};
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,17));
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,32));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,43));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,27));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,31));
         var cancel=new Button {Text="QUAY LẠI",Dock=DockStyle.Fill,Margin=new Padding(0,0,7,0)};
-        var viewBill=new Button {Text="XEM / IN BILL TẠM TÍNH",Dock=DockStyle.Fill,Margin=new Padding(7,0,7,0)};
+        var editBill=new Button {Text="XEM / SỬA BILL PHÒNG",Dock=DockStyle.Fill,Margin=new Padding(7,0,7,0)};
+        var viewBill=new Button {Text="IN BILL TỔNG",Dock=DockStyle.Fill,Margin=new Padding(7,0,7,0)};
         var pay=new Button {Text="XÁC NHẬN THANH TOÁN",Dock=DockStyle.Fill,Margin=new Padding(7,0,0,0)};
-        AppTheme.Button(cancel);AppTheme.Button(viewBill);AppTheme.Button(pay,true);
-        buttons.Controls.Add(cancel,0,0);buttons.Controls.Add(viewBill,1,0);
-        buttons.Controls.Add(pay,2,0);root.Controls.Add(buttons,0,4);
+        AppTheme.Button(cancel);AppTheme.Button(editBill);AppTheme.Button(viewBill);AppTheme.Button(pay,true);
+        buttons.Controls.Add(cancel,0,0);buttons.Controls.Add(editBill,1,0);
+        buttons.Controls.Add(viewBill,2,0);buttons.Controls.Add(pay,3,0);root.Controls.Add(buttons,0,4);
         cancel.Click+=(_,_)=>form.Close();
+        editBill.Click+=(_,_)=>
+        {
+            if(list.SelectedItems.Count==0){Ui.Error(form,new BusinessException("Chọn phòng cần sửa bill."));return;}
+            var item=list.SelectedItems[0];
+            var updated=EditDraftBill((BillQuote)item.Tag!,(string)method.SelectedItem!,reference.Text,form);
+            if(updated is null)return;
+            item.Tag=updated;
+            item.SubItems[1].Text=$"{updated.RoomCharge:N0}";
+            item.SubItems[2].Text=$"{updated.Services:N0}";
+            item.SubItems[3].Text=$"{updated.Total:N0}";
+            item.SubItems[5].Text=$"{updated.ToCollect:N0}";
+            Summarize();
+        };
         viewBill.Click+=async (_,_)=>
         {
-            try{await ShowBillBeforePayment(Chosen(),(string)method.SelectedItem!,reference.Text);}
+            try{await ShowBillBeforePayment(Chosen(),(string)method.SelectedItem!,reference.Text,form);}
             catch(Exception ex){Ui.Error(form,ex);}
         };
         var completed=false;

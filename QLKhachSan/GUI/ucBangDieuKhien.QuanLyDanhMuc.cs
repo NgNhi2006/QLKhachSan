@@ -4,6 +4,17 @@ namespace QLKhachSan.GUI;
 
 public partial class ucDashboard
 {
+    private sealed class ServiceMenuColors : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground=>Color.White;
+        public override Color ImageMarginGradientBegin=>Color.White;
+        public override Color ImageMarginGradientMiddle=>Color.White;
+        public override Color ImageMarginGradientEnd=>Color.White;
+        public override Color MenuItemSelected=>Color.FromArgb(229,242,233);
+        public override Color MenuItemBorder=>AppTheme.Blue;
+        public override Color MenuBorder=>AppTheme.Border;
+    }
+
     private void AddTool(string title,int y,Func<Task> action)
     {
         var button=new Button {Text=title,Width=190,Height=38,Location=new Point(10,y)};
@@ -63,84 +74,237 @@ public partial class ucDashboard
         });
         dialog.ShowDialog(this);return Task.CompletedTask;
     }
+    private sealed record OrderManagementRow(Stay Stay,string RoomNumber,ServiceLine Line)
+    {
+        public string Guest=>Stay.Guest;
+        public string Service=>Line.Name;
+        public int OrderedQuantity=>Line.Quantity;
+        public int DeliveredQuantity=>Line.DeliveredQuantity;
+        public string Progress=>$"{Line.DeliveredQuantity} / {Line.Quantity}";
+        public int Remaining=>Math.Max(0,Line.Quantity-Line.DeliveredQuantity);
+        public decimal Amount=>Line.Total;
+        public string Status=>Line.Cancelled is not null?"Đã hủy":Remaining>0?"Chờ giao":"Đã giao";
+        public DateTime OrderedAt=>Line.Ordered;
+    }
+
     private async Task ShowOrderManagement()
     {
-        var selected=SelectStay("Chọn lượt để xử lý dịch vụ");if(selected is null)return;
-        using var dialog=new Form {Text="Xử lý dịch vụ",Size=new Size(1100,700),MinimumSize=new Size(900,570),StartPosition=FormStartPosition.CenterParent,Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
-        var root=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3};
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute,80));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,118));dialog.Controls.Add(root);
+        using var dialog=new Form {Text="Xử lý dịch vụ các phòng",Size=new Size(1080,640),
+            MinimumSize=new Size(880,540),StartPosition=FormStartPosition.CenterParent,
+            Font=AppTheme.Body,BackColor=AppTheme.Canvas,AutoScaleMode=AutoScaleMode.Dpi};
+        var root=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute,80));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent,100));dialog.Controls.Add(root);
         var heading=new Panel {Dock=DockStyle.Fill,BackColor=Color.White,Padding=new Padding(24,10,20,8)};
-        heading.Controls.Add(new Label {Text=$"Dịch vụ phòng P.{StayRoom(selected)?.Number}",Dock=DockStyle.Top,Height=36,Font=AppTheme.Title,ForeColor=AppTheme.Ink});
-        heading.Controls.Add(new Label {Text=$"{selected.Guest}  •  Chọn một dịch vụ để giao, sửa hoặc hủy",Dock=DockStyle.Bottom,Height=22,ForeColor=AppTheme.Muted});root.Controls.Add(heading,0,0);
+        heading.Controls.Add(new Label {Text="Yêu cầu dịch vụ các phòng",Dock=DockStyle.Top,Height=36,
+            Font=AppTheme.Title,ForeColor=AppTheme.Ink});
+        heading.Controls.Add(new Label {Text="Xem ngay phòng nào đang chờ dịch vụ, tìm theo phòng, khách hoặc tên dịch vụ.",
+            Dock=DockStyle.Bottom,Height=22,ForeColor=AppTheme.Muted});root.Controls.Add(heading,0,0);
         var body=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1,Padding=new Padding(18,14,18,8)};
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,66));body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,34));root.Controls.Add(body,0,1);
-        var listPanel=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,BackColor=Color.White,Padding=new Padding(14),Margin=new Padding(0,0,7,0)};
-        listPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,32));listPanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));body.Controls.Add(listPanel,0,0);
-        var count=new Label {Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Blue};listPanel.Controls.Add(count,0,0);
-        var grid=Ui.Grid();grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;listPanel.Controls.Add(grid,0,1);
-        var editor=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=8,BackColor=Color.White,Padding=new Padding(16,12,16,10),Margin=new Padding(7,0,0,0)};
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-        foreach(var height in new[]{32,80,28,42,28,42,0,0})editor.RowStyles.Add(new RowStyle(height==0?SizeType.Percent:SizeType.Absolute,height==0?50:height));body.Controls.Add(editor,1,0);
-        editor.Controls.Add(new Label {Text="DỊCH VỤ ĐANG CHỌN",Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Blue},0,0);
-        var detail=new Label {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas,Padding=new Padding(10,9,6,6),ForeColor=AppTheme.Ink};editor.Controls.Add(detail,0,1);
-        editor.Controls.Add(new Label {Text="Số lượng mới / số lượng giao thêm",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},0,2);
-        var quantity=Ui.Number(100);quantity.Dock=DockStyle.Fill;editor.Controls.Add(quantity,0,3);
-        editor.Controls.Add(new Label {Text="Lý do sửa hoặc hủy",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted},0,4);
-        var reason=Ui.Text(300);reason.Dock=DockStyle.Fill;editor.Controls.Add(reason,0,5);
-        editor.Controls.Add(new Label {Text="Có thể giao từng phần. Giảm số lượng xuống bằng số đã giao để bỏ phần còn lại.",Dock=DockStyle.Fill,ForeColor=AppTheme.Muted,Padding=new Padding(0,12,0,0)},0,6);
-        var footer=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=2,Padding=new Padding(18,10,18,14)};
-        for(var i=0;i<3;i++)footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/3));
-        footer.RowStyles.Add(new RowStyle(SizeType.Percent,50));footer.RowStyles.Add(new RowStyle(SizeType.Percent,50));root.Controls.Add(footer,0,2);
-        Button ActionButton(string text,int column,int row,bool primary=false)
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,70));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,30));root.Controls.Add(body,0,1);
+        var listPanel=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,
+            BackColor=Color.White,Padding=new Padding(14),Margin=new Padding(0,0,7,0)};
+        listPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,32));
+        listPanel.RowStyles.Add(new RowStyle(SizeType.Absolute,44));
+        listPanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));body.Controls.Add(listPanel,0,0);
+        var count=new Label {Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Blue};
+        listPanel.Controls.Add(count,0,0);
+        var filters=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2};
+        filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,70));
+        filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,30));
+        var search=Ui.Text(100);search.Dock=DockStyle.Fill;
+        search.PlaceholderText="Tìm số phòng, khách hoặc dịch vụ";
+        var status=Ui.Combo(new[]{"Chờ giao","Tất cả","Đã giao","Đã hủy"});status.Dock=DockStyle.Fill;
+        filters.Controls.Add(search,0,0);filters.Controls.Add(status,1,0);
+        listPanel.Controls.Add(filters,0,1);
+        var grid=Ui.Grid();grid.AutoGenerateColumns=false;grid.ReadOnly=true;
+        grid.MultiSelect=false;grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;
+        grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;
+        void Column(string property,string title,float weight,string? format=null)
         {
-            var button=new Button {Text=text,Dock=DockStyle.Fill,Margin=new Padding(4)};AppTheme.Button(button,primary);footer.Controls.Add(button,column,row);return button;
+            var column=new DataGridViewTextBoxColumn {DataPropertyName=property,HeaderText=title,
+                FillWeight=weight,ReadOnly=true};
+            if(format is not null)column.DefaultCellStyle.Format=format;
+            grid.Columns.Add(column);
         }
-        var deliver=ActionButton("GIAO THÊM",0,0,true);var change=ActionButton("SỬA SỐ LƯỢNG",1,0);var cancel=ActionButton("HỦY DÒNG",2,0);
-        var deliverAll=ActionButton("XÁC NHẬN TẤT CẢ",0,1);var cancelAll=ActionButton("HỦY TẤT CẢ CHƯA GIAO",1,1);var close=ActionButton("ĐÓNG",2,1);close.Click+=(_,_)=>dialog.Close();
+        Column(nameof(OrderManagementRow.RoomNumber),"Phòng",65);
+        Column(nameof(OrderManagementRow.Guest),"Khách",120);
+        Column(nameof(OrderManagementRow.Service),"Dịch vụ",175);
+        Column(nameof(OrderManagementRow.Progress),"Giao / Gọi",85);
+        Column(nameof(OrderManagementRow.Remaining),"Còn chờ",75);
+        Column(nameof(OrderManagementRow.Amount),"Tiền",95,"N0");
+        Column(nameof(OrderManagementRow.Status),"Trạng thái",88);
+        listPanel.Controls.Add(grid,0,2);
+        var editor=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,
+            BackColor=Color.White,Padding=new Padding(16,12,16,10),Margin=new Padding(7,0,0,0)};
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        foreach(var height in new[]{32,105,29,44,65,48,48})
+            editor.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
+        body.Controls.Add(editor,1,0);
+        editor.Controls.Add(new Label {Text="YÊU CẦU ĐANG CHỌN",Dock=DockStyle.Fill,
+            Font=AppTheme.Bold,ForeColor=AppTheme.Blue},0,0);
+        var detail=new Label {Dock=DockStyle.Fill,BackColor=AppTheme.Canvas,
+            Padding=new Padding(10,9,6,6),ForeColor=AppTheme.Ink};editor.Controls.Add(detail,0,1);
+        editor.Controls.Add(new Label {Text="Tổng số lượng khách yêu cầu",Dock=DockStyle.Fill,
+            ForeColor=AppTheme.Muted},0,2);
+        var totalQuantity=Ui.Number(100);totalQuantity.Dock=DockStyle.Fill;
+        editor.Controls.Add(totalQuantity,0,3);
+        var guidance=new Label {Dock=DockStyle.Fill,ForeColor=AppTheme.Muted,
+            Padding=new Padding(0,9,0,0)};editor.Controls.Add(guidance,0,4);
+        var change=new Button {Text="LƯU SỐ LƯỢNG",Dock=DockStyle.Fill,Margin=new Padding(0,2,0,4)};
+        AppTheme.Button(change,true);editor.Controls.Add(change,0,5);
+        var otherActions=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2};
+        otherActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,55));
+        otherActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,45));
+        var deliver=new Button {Text="GIAO DỊCH VỤ...",Dock=DockStyle.Fill,Margin=new Padding(0,2,4,0)};
+        var more=new Button {Text="TÙY CHỌN  ▾",Dock=DockStyle.Fill,Margin=new Padding(4,2,0,0)};
+        AppTheme.Button(deliver);AppTheme.Button(more);
+        otherActions.Controls.Add(deliver,0,0);otherActions.Controls.Add(more,1,0);
+        editor.Controls.Add(otherActions,0,6);
+        var menu=new ContextMenuStrip {Font=AppTheme.TextFont(11.5f),BackColor=Color.White,
+            ForeColor=AppTheme.Ink,Padding=new Padding(8),ShowImageMargin=true,
+            ShowCheckMargin=false,ImageScalingSize=new Size(22,22),
+            Renderer=new ToolStripProfessionalRenderer(new ServiceMenuColors())};
+        ToolStripMenuItem MenuAction(string label,string icon,bool danger=false)
+        {
+            var item=new ToolStripMenuItem(label) {AutoSize=false,Size=new Size(354,50),
+                Font=AppTheme.TextFont(11.5f),ForeColor=danger?Color.FromArgb(166,49,54):AppTheme.Ink,
+                Image=UiIcons.Create(icon,danger?Color.FromArgb(166,49,54):AppTheme.Blue,22),
+                ImageScaling=ToolStripItemImageScaling.None,TextAlign=ContentAlignment.MiddleLeft,
+                Padding=new Padding(10,5,8,5)};
+            return item;
+        }
+        var move=MenuAction("Chuyển sang phòng khác","swap");
+        var deliverAll=MenuAction("Giao hết dịch vụ của phòng","service");
+        var cancel=MenuAction("Hủy yêu cầu này","close",true);
+        var cancelAll=MenuAction("Hủy dịch vụ chưa giao của phòng","close",true);
+        menu.Items.AddRange([move,deliverAll,new ToolStripSeparator(),cancel,cancelAll]);
+        dialog.Disposed+=(_,_)=>menu.Dispose();
+        more.Click+=(_,_)=>menu.Show(more,new Point(more.Width-menu.Width,more.Height+5));
+        var allRows=new List<OrderManagementRow>();
+        OrderManagementRow Selected()=>grid.CurrentRow?.DataBoundItem as OrderManagementRow
+            ??throw new BusinessException("Chọn một yêu cầu dịch vụ.");
         void ShowSelection()
         {
-            if(grid.CurrentRow?.DataBoundItem is not ServiceLine line){detail.Text="Chưa chọn dịch vụ.";deliver.Enabled=change.Enabled=cancel.Enabled=false;return;}
-            detail.Text=$"{line.Name}\nĐã gọi: {line.Quantity}  •  Đã giao: {line.DeliveredQuantity}\nĐơn giá: {line.Price:N0} đ";
-            var editable=line.Cancelled is null;deliver.Enabled=editable && line.DeliveredQuantity<line.Quantity;
-            change.Enabled=editable;cancel.Enabled=editable && line.DeliveredQuantity==0;
+            if(grid.CurrentRow?.DataBoundItem is not OrderManagementRow row)
+            {
+                detail.Text="Chưa chọn yêu cầu dịch vụ.";
+                deliver.Enabled=change.Enabled=more.Enabled=false;
+                move.Enabled=cancel.Enabled=deliverAll.Enabled=cancelAll.Enabled=false;
+                return;
+            }
+            detail.Text=$"P.{row.RoomNumber}  •  {row.Guest}\n{row.Service}\n"+
+                $"Đã gọi {row.Line.Quantity}  •  Đã giao {row.Line.DeliveredQuantity}  •  Còn chờ {row.Remaining}\n"+
+                $"Đơn giá {row.Line.Price:N0} đ";
+            totalQuantity.Minimum=Math.Max(1,row.Line.DeliveredQuantity);
+            totalQuantity.Value=Math.Clamp(row.Line.Quantity,1,100);
+            guidance.Text=$"Sửa tổng số lượng ở trên rồi lưu. Giao dịch vụ là thao tác riêng; còn chờ {row.Remaining}.";
+            var editable=row.Line.Cancelled is null;
+            deliver.Enabled=editable && row.Remaining>0;
+            change.Enabled=editable && totalQuantity.Value!=row.Line.Quantity;
+            more.Enabled=true;
+            move.Enabled=editable && row.Line.DeliveredQuantity==0 &&
+                data.Stays.Any(x=>x.Status==StayStatus.Occupied && x.CustomerId==row.Stay.CustomerId && x.Id!=row.Stay.Id);
+            cancel.Enabled=editable && row.Line.DeliveredQuantity==0;
+            var roomWaiting=allRows.Any(x=>x.Stay.Id==row.Stay.Id && x.Line.Cancelled is null && x.Remaining>0);
+            deliverAll.Enabled=cancelAll.Enabled=roomWaiting;
+        }
+        void FilterRows()
+        {
+            var previous=grid.CurrentRow?.DataBoundItem as OrderManagementRow;
+            var query=search.Text.Trim();
+            var state=(string?)status.SelectedItem??"Chờ giao";
+            var rows=allRows.Where(x=>state=="Tất cả" || x.Status==state)
+                .Where(x=>query.Length==0 ||
+                    (x.RoomNumber+" "+x.Guest+" "+x.Service).Contains(query,StringComparison.CurrentCultureIgnoreCase))
+                .OrderBy(x=>x.Status=="Chờ giao"?0:1).ThenBy(x=>x.OrderedAt).ToList();
+            grid.DataSource=rows;
+            var keep=rows.FindIndex(x=>x.Line.Id==previous?.Line.Id);
+            if(keep<0)keep=rows.FindIndex(x=>x.Stay.Id==previous?.Stay.Id);
+            if(keep>=0 && grid.Rows.Count>keep)
+            {grid.ClearSelection();grid.Rows[keep].Selected=true;grid.CurrentCell=grid.Rows[keep].Cells[0];}
+            count.Text=$"CÒN CHỜ: {allRows.Count(x=>x.Status=="Chờ giao")} yêu cầu / {allRows.Where(x=>x.Status=="Chờ giao").Select(x=>x.Stay.Id).Distinct().Count()} phòng"+
+                $"  •  {data.Stays.Count(x=>x.Status==StayStatus.Occupied)} phòng đang ở";
+            ShowSelection();
         }
         async Task RefreshOrders()
         {
             await Reload();
-            selected=data.Stays.SingleOrDefault(s=>s.Id==selected.Id)??throw new BusinessException("Lượt đã đóng.");
-            var rows=await service.StayOrdersAsync(selected.Id);grid.DataSource=rows;
-            foreach(DataGridViewColumn column in grid.Columns)column.Visible=column.Name is "Name" or "Quantity" or "DeliveredQuantity" or "Price" or "Total" or "Cancelled";
-            var names=new Dictionary<string,string>{{"Name","Dịch vụ"},{"Quantity","Đã gọi"},{"DeliveredQuantity","Đã giao"},{"Price","Đơn giá"},{"Total","Thành tiền"},{"Cancelled","Đã hủy"}};
-            foreach(DataGridViewColumn column in grid.Columns)
-            {
-                if(names.TryGetValue(column.Name,out var title))column.HeaderText=title;
-                if(column.Name is "Price" or "Total")column.DefaultCellStyle.Format="N0";
-                if(column.Name=="Cancelled")column.DefaultCellStyle.Format="dd/MM HH:mm";
-            }
-            count.Text=$"DANH SÁCH DỊCH VỤ ({rows.Count})";
-            deliverAll.Enabled=cancelAll.Enabled=rows.Any(x=>x.Cancelled is null && x.DeliveredQuantity<x.Quantity);
-            ShowSelection();
+            var stays=data.Stays.Where(x=>x.Status==StayStatus.Occupied).ToArray();
+            var orders=await Task.WhenAll(stays.Select(x=>service.StayOrdersAsync(x.Id)));
+            allRows=stays.SelectMany((stay,index)=>orders[index].Select(line=>
+                    new OrderManagementRow(stay,StayRoom(stay)?.Number??"?",line))).ToList();
+            FilterRows();
         }
-        ServiceLine Line()=>grid.CurrentRow?.DataBoundItem as ServiceLine??throw new BusinessException("Chọn một dịch vụ.");
-        async Task Execute(Func<Task> work)
+        async Task Execute(Func<OrderManagementRow,Task> work)
         {
-            footer.Enabled=false;
-            try{await work();await RefreshOrders();}catch(Exception ex){Ui.Error(dialog,ex);}finally{footer.Enabled=true;ShowSelection();}
+            var row=Selected();change.Enabled=deliver.Enabled=more.Enabled=false;
+            try{await work(row);await RefreshOrders();}
+            catch(Exception ex){Ui.Error(dialog,ex);}
+            finally{ShowSelection();}
         }
         grid.SelectionChanged+=(_,_)=>ShowSelection();
-        deliver.Click+=async (_,_)=>await Execute(()=>service.DeliverOrderAsync(selected,Line().Id,(int)quantity.Value));
-        change.Click+=async (_,_)=>await Execute(()=>service.ChangeOrderAsync(selected,Line().Id,(int)quantity.Value,reason.Text));
+        totalQuantity.ValueChanged+=(_,_)=>
+        {
+            if(grid.CurrentRow?.DataBoundItem is OrderManagementRow row)
+                change.Enabled=row.Line.Cancelled is null && totalQuantity.Value!=row.Line.Quantity;
+        };
+        search.TextChanged+=(_,_)=>FilterRows();
+        status.SelectedIndexChanged+=(_,_)=>FilterRows();
+        deliver.Click+=(_,_)=>
+        {
+            var row=Selected();
+            using var picker=new InputDialog($"Giao dịch vụ · P.{row.RoomNumber}",500,330);
+            var amount=Ui.Number(row.Remaining);amount.Value=1;
+            picker.Add($"Giao thêm {row.Service} (còn chờ {row.Remaining})",amount);
+            picker.Note($"Phòng {row.RoomNumber}  •  Đã giao {row.Line.DeliveredQuantity}/{row.Line.Quantity}");
+            picker.Action("XÁC NHẬN ĐÃ GIAO",async()=>
+            {
+                await service.DeliverOrderAsync(row.Stay,row.Line.Id,(int)amount.Value);
+                await RefreshOrders();
+            });
+            picker.ShowDialog(dialog);
+        };
+        change.Click+=async (_,_)=>await Execute(row=>service.ChangeOrderAsync(row.Stay,row.Line.Id,
+            (int)totalQuantity.Value,"Điều chỉnh số lượng dịch vụ"));
+        move.Click+=(_,_)=>
+        {
+            var row=Selected();
+            var choices=data.Stays.Where(x=>x.Status==StayStatus.Occupied &&
+                x.CustomerId==row.Stay.CustomerId && x.Id!=row.Stay.Id)
+                .Select(x=>new StayChoice(x,$"P.{StayRoom(x)?.Number}  •  {x.Guest}")).ToArray();
+            if(choices.Length==0)return;
+            using var picker=new InputDialog($"Chuyển dịch vụ P.{row.RoomNumber}",540,330);
+            var target=Ui.Combo(choices);
+            picker.Add($"Chuyển {row.Service} sang phòng",target);
+            picker.Note("Chỉ chuyển được yêu cầu chưa giao của cùng khách.");
+            picker.Action("CHUYỂN YÊU CẦU",async()=>
+            {
+                if(target.SelectedItem is not StayChoice choice)
+                    throw new BusinessException("Chọn phòng nhận yêu cầu.");
+                await service.MoveOrderAsync(row.Stay,choice.Stay,row.Line.Id,"Chuyển yêu cầu sang phòng đúng");
+                await RefreshOrders();
+            });
+            picker.ShowDialog(dialog);
+        };
         cancel.Click+=async (_,_)=>
         {
-            var line=Line();if(Ui.Confirm(dialog,$"Hủy {line.Name}? Lịch sử vẫn được lưu."))await Execute(()=>service.ChangeOrderAsync(selected,line.Id,0,reason.Text,true));
+            var row=Selected();
+            if(Ui.Confirm(dialog,$"Hủy {row.Service} của phòng {row.RoomNumber}? Lịch sử vẫn được lưu."))
+                await Execute(x=>service.ChangeOrderAsync(x.Stay,x.Line.Id,0,"Hủy yêu cầu dịch vụ",true));
         };
         deliverAll.Click+=async (_,_)=>
         {
-            if(Ui.Confirm(dialog,$"Xác nhận đã giao toàn bộ dịch vụ còn chờ của {selected.Guest}?"))await Execute(()=>service.DeliverAsync(selected));
+            var row=Selected();
+            if(Ui.Confirm(dialog,$"Xác nhận đã giao hết dịch vụ còn chờ của phòng {row.RoomNumber}?"))
+                await Execute(x=>service.DeliverAsync(x.Stay));
         };
         cancelAll.Click+=async (_,_)=>
         {
-            if(Ui.Confirm(dialog,$"Hủy mọi phần dịch vụ chưa giao của {selected.Guest}? Phần đã giao vẫn tính tiền."))await Execute(()=>service.CancelPendingOrdersAsync(selected,reason.Text));
+            var row=Selected();
+            if(Ui.Confirm(dialog,$"Hủy phần dịch vụ chưa giao của phòng {row.RoomNumber}? Phần đã giao vẫn tính tiền."))
+                await Execute(x=>service.CancelPendingOrdersAsync(x.Stay,"Hủy yêu cầu dịch vụ chưa giao"));
         };
         await RefreshOrders();dialog.ShowDialog(this);
     }

@@ -17,7 +17,7 @@ public partial class ucDashboard
 
         var filters=new FlowLayoutPanel {Dock=DockStyle.Fill,BackColor=Color.White,WrapContents=false,
             AutoScroll=true,Padding=new Padding(14,12,10,8),Margin=new Padding(0,0,0,10)};
-        var search=new TextBox {Width=260,Height=34,Font=AppTheme.Body,PlaceholderText="Tìm số phòng...",
+        var search=new TextBox {Width=260,Height=34,Font=AppTheme.Body,PlaceholderText="Tìm số hoặc mã phòng...",
             Margin=new Padding(0,3,16,0),BorderStyle=BorderStyle.FixedSingle};
         var type=new ComboBox {Width=180,DropDownStyle=ComboBoxStyle.DropDownList,Font=AppTheme.Body,
             Margin=new Padding(0,3,16,0)};
@@ -100,7 +100,8 @@ public partial class ucDashboard
 
                 var query=data.Rooms.AsEnumerable();
                 if(!string.IsNullOrWhiteSpace(search.Text))
-                    query=query.Where(r=>r.Number.Contains(search.Text.Trim(),StringComparison.OrdinalIgnoreCase));
+                    query=query.Where(r=>r.Number.Contains(search.Text.Trim(),StringComparison.OrdinalIgnoreCase)
+                        || r.Code.Contains(search.Text.Trim(),StringComparison.OrdinalIgnoreCase));
                 if(type.SelectedIndex>0)query=query.Where(r=>r.Type==type.SelectedItem?.ToString());
                 if(status.SelectedIndex>0)
                 {
@@ -118,15 +119,15 @@ public partial class ucDashboard
                     var floorLabel=new Label {Text=floor.Key,Location=new Point(10,16),Size=new Size(86,50),
                         Font=AppTheme.Bold,ForeColor=AppTheme.Navy};
                     row.Controls.Add(floorLabel);
-                    var tileWidth=132;
+                    var tileWidth=200;
                     var columns=Math.Max(1,(row.Width-110)/tileWidth);
                     var index=0;
                     foreach(var room in floor)
                     {
                         var reservations=data.Stays.Count(s=>s.RoomId==room.Id && s.Status==StayStatus.Reserved);
-                        var tile=new RoomTile {Tag=room,Reservations=reservations,
-                            AccessibleName=$"Phòng {room.Number}, {Ui.Status(room.Status)}, {reservations} lịch đặt",
-                            Size=new Size(124,86),Location=new Point(105+(index%columns)*tileWidth,5+(index/columns)*94)};
+                        var tile=new RoomTile {Tag=room,Reservations=reservations,ShowCode=true,
+                            AccessibleName=$"Phòng {room.Number}, mã {room.Code}, {Ui.Status(room.Status)}, {reservations} lịch đặt",
+                            Size=new Size(192,104),Location=new Point(105+(index%columns)*tileWidth,5+(index/columns)*112)};
                         tile.Click+=async (_,_)=>
                         {
                             if(tile.Tag is not Room selected)return;
@@ -139,7 +140,7 @@ public partial class ucDashboard
                         };
                         row.Controls.Add(tile);index++;
                     }
-                    row.Height=Math.Max(96,((index+columns-1)/columns)*94+8);
+                    row.Height=Math.Max(114,((index+columns-1)/columns)*112+8);
                     row.Paint+=(_,e)=>
                     {
                         using var border=new Pen(AppTheme.Border);

@@ -68,7 +68,8 @@ public partial class ucDashboard
         var deposit=new CheckBox {Text="Đã thu tiền cọc",AutoSize=true};
         var amount=Ui.Money();var method=Ui.Combo(new[]{"Tiền mặt","Chuyển khoản","Thẻ POS"});
         if(room.SelectedItem is Room initialRoom)amount.Value=Math.Min(amount.Maximum,initialRoom.Deposit);
-        var reference=Ui.Text(100);reference.PlaceholderText="Nhập mã giao dịch QR/POS";
+        var reference=Ui.Text(100);reference.PlaceholderText="Nội dung chuyển khoản hoặc mã giao dịch POS";
+        var transferContent="COC-"+Guid.NewGuid().ToString("N")[..10].ToUpperInvariant();
         var payment=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=4};
         for(var i=0;i<4;i++)payment.RowStyles.Add(new RowStyle(SizeType.Absolute,i==0?32:45));
         payment.Controls.Add(deposit,0,0);
@@ -87,26 +88,13 @@ public partial class ucDashboard
         var qrInfo=new Label {Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Ink};
         var qr=new PictureBox {Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.White,
             Margin=new Padding(12,0,12,2)};
-        qr.LoadCompleted+=(_,e)=>
-        {
-            if(e.Error is not null && !form.IsDisposed)
-                qrInfo.Text="Không tải được QR. Kiểm tra mạng hoặc dùng thông tin tài khoản để chuyển khoản.";
-        };
         qrArea.Controls.Add(qrInfo,0,0);qrArea.Controls.Add(qr,0,1);
         if(reserve)right.Controls.Add(qrArea,0,3);
         else right.Controls.Add(new Label {Text="Khách có thể sử dụng dịch vụ trong thời gian lưu trú.\nBill sẽ tổng hợp tiền phòng và dịch vụ khi trả phòng.",
             Dock=DockStyle.Fill,Font=AppTheme.Bold,ForeColor=AppTheme.Muted,
             TextAlign=ContentAlignment.MiddleCenter},0,3);
         var settings=AppSettings.Load();
-        var qrTimer=new System.Windows.Forms.Timer {Interval=450};
-        qrTimer.Tick+=(_,_)=>
-        {
-            qrTimer.Stop();if(form.IsDisposed)return;
-            var content=$"COC P{(room.SelectedItem as Room)?.Number} {phone.Text.Trim()}";
-            var url=$"https://img.vietqr.io/image/{Uri.EscapeDataString(settings.BankCode)}-{Uri.EscapeDataString(settings.BankAccount)}-qr_only.png?amount={amount.Value:0}&addInfo={Uri.EscapeDataString(content)}&accountName={Uri.EscapeDataString(settings.BankAccountName)}";
-            try{qr.CancelAsync();qr.LoadAsync(url);}
-            catch(InvalidOperationException){qrInfo.Text="Không tải được QR. Kiểm tra kết nối mạng.";}
-        };
+        void ClearQr(){var old=qr.Image;qr.Image=null;old?.Dispose();}
         void Refresh()
         {
             var current=room.SelectedItem as Room;
@@ -122,17 +110,21 @@ public partial class ucDashboard
                 var configured=!string.IsNullOrWhiteSpace(settings.BankCode) &&
                     !string.IsNullOrWhiteSpace(settings.BankAccount) &&
                     !string.IsNullOrWhiteSpace(settings.BankAccountName);
+                ClearQr();
                 qrInfo.Text=!configured
-                    ?"Chưa cấu hình tài khoản ngân hàng.":$"QUÉT QR ĐỂ CHUYỂN CỌC  ·  {amount.Value:N0} đ\nSTK {settings.BankAccount}  ·  {settings.BankAccountName}";
+                    ?"Chưa cấu hình tài khoản ngân hàng.":$"QUÉT QR  ·  {amount.Value:N0} đ  ·  STK {settings.BankAccount}\nNội dung: {reference.Text.Trim()}";
                 qr.Visible=configured;
                 if(configured)
-                {qrTimer.Stop();qrTimer.Start();}
+                {
+                    try{qr.Image=BankTransferQr.Create(settings,amount.Value,reference.Text);}
+                    catch(ArgumentException ex){qrInfo.Text=ex.Message;}
+                }
             }
             else
             {
                 qrInfo.Text=paid?"Chọn Chuyển khoản để hiển thị mã QR tại đây.":
                     "Chưa thu cọc: giữ phòng tối đa 24 giờ.\nĐã thu cọc: giữ tối đa 15 ngày; quá hạn nhận phòng không hoàn cọc.";
-                qr.Visible=false;qrTimer.Stop();qr.CancelAsync();
+                qr.Visible=false;ClearQr();
             }
         }
         void FilterRooms()
@@ -167,7 +159,13 @@ public partial class ucDashboard
             UpdateHold();Refresh();
         };
         amount.ValueChanged+=(_,_)=>{UpdateHold();Refresh();};
-        method.SelectedIndexChanged+=(_,_)=>Refresh();phone.TextChanged+=(_,_)=>Refresh();
+        method.SelectedIndexChanged+=(_,_)=>
+        {
+            if((string?)method.SelectedItem=="Chuyển khoản" && string.IsNullOrWhiteSpace(reference.Text))
+                reference.Text=transferContent;
+            Refresh();
+        };
+        reference.TextChanged+=(_,_)=>Refresh();
         FilterRooms();UpdateHold();Refresh();
         var footer=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,Padding=new Padding(16,12,16,12),BackColor=Color.White};
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,32));footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,68));
@@ -189,7 +187,7 @@ public partial class ucDashboard
             }
             catch(Exception ex){Ui.Error(form,ex);save.Enabled=true;}
         };
-        form.FormClosed+=(_,_)=>{qrTimer.Stop();qrTimer.Dispose();qr.CancelAsync();};
+        form.FormClosed+=(_,_)=>ClearQr();
         form.AcceptButton=save;form.ShowDialog(this);
         return Task.CompletedTask;
     }

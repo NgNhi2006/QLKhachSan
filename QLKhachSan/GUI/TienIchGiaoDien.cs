@@ -1,4 +1,6 @@
 using Microsoft.Data.SqlClient;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using QLKhachSan.DAL;
 using QLKhachSan.DTO;
 
@@ -12,6 +14,7 @@ internal static class Ui
         {
             BusinessException => ex.Message,
             SchemaMigrationException => ex.Message,
+            SqlException s when s.Number is 26 or 40 or 53 or -1 => "Không kết nối được SQL Server (.\\SQLEXPRESS). Hãy mở Services, khởi động SQL Server (SQLEXPRESS), rồi bấm Thử lại kết nối. Nếu dịch vụ không khởi động, kiểm tra nhật ký lỗi SQL Server hoặc nhờ quản trị máy hỗ trợ.",
             SqlException s when s.Number==51001 => "Hệ thống đang xử lý giao dịch khác. Vui lòng thử lại.",
             SqlException s when s.Number==51101 => "Kỳ kế toán đã khóa; không thể ghi hoặc sửa chứng từ thuộc kỳ này.",
             SqlException s when s.Number==51102 => "Ca đã khóa; giao dịch thuộc ca không thể sửa hoặc hủy.",
@@ -23,6 +26,7 @@ internal static class Ui
         Log(ex);
         MessageBox.Show(owner,message,"Thông báo",MessageBoxButtons.OK,MessageBoxIcon.Warning);
     }
+    public static void Info(IWin32Window? owner,string message) => MessageBox.Show(owner,message,"Thông báo",MessageBoxButtons.OK,MessageBoxIcon.Information);
     public static void Log(Exception ex)
     {
         // Stack frames identify the failing operation without logging inputs or SQL text.
@@ -55,6 +59,22 @@ internal static class Ui
     public static DateTimePicker DatePicker(DateTime value) => new() { Format=DateTimePickerFormat.Custom,CustomFormat="dd/MM/yyyy HH:mm",Value=value,Dock=DockStyle.Top,Font=AppTheme.Body };
     public static NumericUpDown Number(int max,int value=1) => new() { Minimum=1,Maximum=max,Value=value,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink };
     public static NumericUpDown Money(decimal value=0) => new() {Minimum=0,Maximum=1_000_000_000,Value=Math.Clamp(value,0,1_000_000_000),ThousandsSeparator=true,Increment=10000,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink};
+    public static NumericUpDown StockQuantity(decimal value=1,bool allowZero=false) => new()
+    {
+        Minimum=allowZero?0:0.001m,Maximum=1_000_000,Value=value,DecimalPlaces=3,
+        Increment=1,ThousandsSeparator=true,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink
+    };
+    public static decimal ParseStockQuantity(string text)
+    {
+        var value=text.Trim().Replace(" ","").Replace("\u00a0","");
+        if(Regex.IsMatch(value,@"^[1-9][0-9]{0,2}(?:[,.][0-9]{3})+$"))
+            value=value.Replace(",","").Replace(".","");
+        else value=value.Replace(',','.');
+        if(!decimal.TryParse(value,NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var quantity)
+            || quantity<=0 || quantity>1_000_000)
+            throw new BusinessException("Số lượng phải lớn hơn 0 và không quá 1.000.000. Ví dụ: 11000 hoặc 11,000 đều là 11 nghìn.");
+        return quantity;
+    }
     public static TextBox Text(int max=100,bool password=false) => new() { MaxLength=max,UseSystemPasswordChar=password,Dock=DockStyle.Top,Font=AppTheme.Body,ForeColor=AppTheme.Ink,BackColor=Color.White,BorderStyle=BorderStyle.FixedSingle };
 }
 
@@ -70,7 +90,7 @@ internal sealed class InputDialog : Form
     public InputDialog(string title,int width=540,int height=620,bool labelsBeside=false)
     {
         this.labelsBeside=labelsBeside;
-        Text=title; Size=new Size(width,height); MinimumSize=new Size(420,320);
+        Text=title;Icon=AppTheme.AppIcon; Size=new Size(width,height); MinimumSize=new Size(420,320);
         StartPosition=FormStartPosition.CenterParent; AutoScaleMode=AutoScaleMode.Dpi;
         Font=dialogFont; BackColor=AppTheme.Canvas;ForeColor=AppTheme.Ink;
         Load+=(_,_)=>
@@ -91,15 +111,15 @@ internal sealed class InputDialog : Form
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         Controls.Add(fields);
         Controls.Add(actions);
-        var heading=new Panel {Dock=DockStyle.Top,Height=86,BackColor=AppTheme.Navy};
+        var heading=new Panel {Dock=DockStyle.Top,Height=76,BackColor=Color.White};
         heading.Paint+=(_,e)=>
         {
             using var accent=new SolidBrush(AppTheme.Focus);
-            using var edge=new Pen(AppTheme.Navy);
-            e.Graphics.FillRectangle(accent,0,0,4,heading.Height);
+            using var edge=new Pen(AppTheme.Border);
+            e.Graphics.FillRectangle(accent,24,18,40,3);
             e.Graphics.DrawLine(edge,0,heading.Height-1,heading.Width,heading.Height-1);
         };
-        heading.Controls.Add(new Label {Text=title,Font=AppTheme.Title,ForeColor=Color.White,AutoEllipsis=true,Dock=DockStyle.Fill,Padding=new Padding(25,23,12,0)});
+        heading.Controls.Add(new Label {Text=title,Font=AppTheme.Title,ForeColor=AppTheme.Navy,AutoEllipsis=true,Dock=DockStyle.Fill,Padding=new Padding(24,28,12,0)});
         Controls.Add(heading);
         FormClosing+=(_,e)=> { if(saving)e.Cancel=true; };
     }

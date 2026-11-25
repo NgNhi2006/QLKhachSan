@@ -1,38 +1,30 @@
+using QLKhachSan.BLL;
+using System.Text.Json;
+
 namespace QLKhachSan.DAL;
 
 public sealed partial class HotelTransaction
 {
-    public async Task<HashSet<string>> MenuFunctionCodesAsync()
+    public Task<HashSet<string>> MenuFunctionCodesAsync()
     {
-        var codes = await Query("""
-            SELECT MaChucNang FROM dbo.ChucNangQuanLyPhong
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangDichVu
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangKhachHang
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangCaTruc
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangThuChi
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangHoaDon
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangBaoCao
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangNhanVien
-            UNION ALL SELECT MaChucNang FROM dbo.ChucNangHeThong
-            """, r => r.GetString(0));
-        return codes.ToHashSet(StringComparer.Ordinal);
+        return Task.FromResult(FunctionPolicy.All.Select(x => x.Code).ToHashSet(StringComparer.Ordinal));
     }
 
     public async Task<HashSet<string>> UserFunctionsAsync(int userId)
     {
-        var available = await MenuFunctionCodesAsync();
-        if (await Scalar("SELECT CONVERT(bigint,DaTuyChinhQuyen) FROM dbo.TaiKhoanNhanVien WHERE Ma=@p0", userId) == 0)
-            return available;
-        var codes = await Query("SELECT MaChucNang FROM dbo.PhanQuyenNhanVien WHERE MaNhanVien=@p0",
-            r => r.GetString(0), userId);
-        return codes.Where(available.Contains).ToHashSet(StringComparer.Ordinal);
+        var rows=await Query("SELECT VaiTro,DaTuyChinhQuyen,QuyenChucNang FROM dbo.TaiKhoanNhanVien WHERE Ma=@p0 AND DaLuuTru=0",
+            r=>(Role:r.GetString(0),Customized:r.GetBoolean(1),Codes:r.IsDBNull(2)?null:r.GetString(2)),userId);
+        var account=rows.SingleOrDefault();
+        if(account.Role is null)throw new InvalidOperationException("Tài khoản không tồn tại.");
+        if(!account.Customized)return FunctionPolicy.Defaults(account.Role);
+        var codes=JsonSerializer.Deserialize<string[]>(account.Codes??"[]")??[];
+        return codes.Where(code=>FunctionPolicy.RoleAllows(account.Role,code)).ToHashSet(StringComparer.Ordinal);
     }
 
     public async Task SaveUserFunctionsAsync(int userId, IEnumerable<string> codes)
     {
-        await Execute("DELETE FROM dbo.PhanQuyenNhanVien WHERE MaNhanVien=@p0", userId);
-        foreach (var code in codes)
-            await Execute("INSERT dbo.PhanQuyenNhanVien(MaNhanVien,MaChucNang) VALUES(@p0,@p1)", userId, code);
-        await Execute("UPDATE dbo.TaiKhoanNhanVien SET DaTuyChinhQuyen=1,PhienBanBaoMat=PhienBanBaoMat+1 WHERE Ma=@p0", userId);
+        var json=JsonSerializer.Serialize(codes.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        if(await Execute("UPDATE dbo.TaiKhoanNhanVien SET QuyenChucNang=@p1,DaTuyChinhQuyen=1,PhienBanBaoMat=PhienBanBaoMat+1 WHERE Ma=@p0 AND DaLuuTru=0",userId,json)!=1)
+            throw new InvalidOperationException("Không lưu được quyền nhân viên.");
     }
 }

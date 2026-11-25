@@ -48,7 +48,8 @@ public sealed partial class HotelService
         return new PeriodReport(await db.InvoicesAsync(from.Date,until),await db.RevenueAsync(from.Date,until),await db.PaymentsAsync(from.Date,until));
     });
     public Task<Stay> InvoiceStayAsync(long stayId) => FinanceRead(db=>db.StayAsync(stayId));
-    public Task<List<ServiceLine>> InvoiceOrdersAsync(long stayId) => FinanceRead(db=>db.AllOrdersAsync(stayId));
+    public Task<List<ServiceLine>> InvoiceOrdersAsync(long stayId) => FinanceRead(async db=>
+        await db.HasInvoiceBillLinesAsync(stayId)?await db.InvoiceBillLinesAsync(stayId):await db.AllOrdersAsync(stayId));
     public Task AddDepositAsync(Stay selected,decimal amount,string method,string? reference=null) => Write(async db=>
     {
         ValidateMoney(amount);Method(method);
@@ -78,10 +79,60 @@ public sealed partial class HotelService
         else
         {
             if(quantity is <1 or >100 || quantity<line.DeliveredQuantity) throw new BusinessException("Số lượng từ 1 đến 100 và không nhỏ hơn số đã giao.");
+            if(quantity>line.Quantity)
+            {
+                var serviceId=await db.OrderServiceIdAsync(line.Id);
+                await EnsureServiceStockAsync(db,[(serviceId,quantity-line.Quantity)]);
+            }
             await db.UpdateOrderAsync(line.Id,quantity,now);
         }
         await db.TouchStayAsync(stay.Id);
         return await db.AuditAsync(user,cancel?"CancelOrder":"EditOrder",$"Dòng {orderId}; SL {line.Quantity} → {(cancel?0:quantity)}; {reason}");
+    });
+    public Task UpdateOccupiedGuestAsync(Stay selected,GuestInput guest,string reason) => Write(async db=>
+    {
+        FunctionPolicy.Require(user,"room.booking_edit");
+        guest=ValidateGuest(guest);
+        reason=Reason(string.IsNullOrWhiteSpace(reason)?"Cập nhật thông tin khách đang ở":reason);
+        var stay=await db.StayAsync(selected.Id);StayUnchanged(stay,selected,StayStatus.Occupied);
+        await db.UpdateOccupiedGuestAsync(stay,guest);
+        return await db.AuditAsync(user,"EditOccupiedGuest",$"Lượt {stay.Id}; {stay.Guest} → {guest.Name}; {reason}");
+    });
+    public Task CancelUnbilledOccupiedAsync(Stay selected) => Write(async db=>
+    {
+        FunctionPolicy.Require(user,"room.booking_cancel");
+        var stay=await db.StayAsync(selected.Id);StayUnchanged(stay,selected,StayStatus.Occupied);
+        if(stay.Deposit!=0 || await db.HasStayFinancialActivityAsync(stay.Id) ||
+            (await db.AllOrdersAsync(stay.Id)).Count!=0 ||
+            await db.HasInvoiceBillLinesAsync(stay.Id) || (await db.SegmentsAsync(stay.Id)).Count!=1)
+            throw new BusinessException("Lượt này đã phát sinh cọc, dịch vụ, hóa đơn hoặc chuyển phòng. Hãy xử lý qua quy trình trả phòng.");
+        var room=await db.RoomAsync(stay.RoomId);
+        if(room.Status!=RoomStatus.DangO)throw new BusinessException("Trạng thái phòng đã thay đổi. Hãy làm mới.");
+        var now=await db.NowAsync();
+        if(await db.EndSegmentAsync(stay.Id,now)!=1)throw new BusinessException("Không tìm thấy giai đoạn lưu trú đang mở.");
+        await db.CloseStayAsync(stay,false,now);
+        await db.SetRoomAsync(room,RoomStatus.Trong);
+        return await db.AuditAsync(user,"CancelCheckIn",$"Hủy nhận phòng lượt {stay.Id}; phòng {room.Number}; chưa phát sinh thanh toán hoặc dịch vụ");
+    });
+    public Task MoveOrderAsync(Stay source,Stay target,long orderId,string reason) => Write(async db=>
+    {
+        reason=Reason(reason);
+        if(source.Id==target.Id || source.CustomerId!=target.CustomerId)
+            throw new BusinessException("Chỉ chuyển dịch vụ sang phòng khác của cùng khách.");
+        var current=await db.StayAsync(source.Id);
+        var destination=await db.StayAsync(target.Id);
+        StayUnchanged(current,source,StayStatus.Occupied);
+        StayUnchanged(destination,target,StayStatus.Occupied);
+        var line=(await db.OrdersAsync(source.Id)).SingleOrDefault(x=>x.Id==orderId)
+            ??throw new BusinessException("Yêu cầu dịch vụ không còn ở phòng này.");
+        if(line.DeliveredQuantity>0)
+            throw new BusinessException("Dịch vụ đã giao không thể chuyển phòng. Hãy điều chỉnh bill khi thanh toán.");
+        if(await db.MoveOrderAsync(orderId,target.Id)!=1)
+            throw new BusinessException("Yêu cầu dịch vụ đã thay đổi. Hãy làm mới danh sách.");
+        await db.TouchStayAsync(source.Id);
+        await db.TouchStayAsync(target.Id);
+        return await db.AuditAsync(user,"MoveOrder",
+            $"Yêu cầu {orderId}: phòng {source.RoomId} → {target.RoomId}; {reason}");
     });
     public Task DeliverOrderAsync(Stay selected,long orderId,int quantity) => Write(async db=>
     {
@@ -115,13 +166,14 @@ public sealed partial class HotelService
         if(item.Name.Length is <2 or >150 || item.Category.Length is <2 or >100 || item.Unit.Length is <1 or >20) throw new BusinessException("Tên, danh mục hoặc đơn vị dịch vụ không hợp lệ.");
         if((await db.CatalogAsync()).Any(x=>x.Id!=item.Id && x.Name.Equals(item.Name,StringComparison.OrdinalIgnoreCase))) throw new BusinessException("Tên dịch vụ đã tồn tại.");
         if(await db.SaveServiceAsync(item)!=1) throw new BusinessException("Danh mục đã thay đổi. Hãy mở lại.");
+        await db.EnsureServiceStockItemsAsync();
         return await db.AuditAsync(user,"ServiceCatalog",$"Dịch vụ {item.Id}: {item.Name}; giá {item.Price}; hoạt động {item.Active}");
     });
     public Task SaveRoomAsync(Room room) => CatalogWrite(async db=>
     {
         ValidateMoney(room.Rate);ValidateMoney(room.Deposit);
         room=room with {Number=room.Number.Trim()};
-        if(room.Number.Length is <1 or >10 || room.Rate==0 || room.Type is not ("Đơn" or "Đôi" or "VIP" or "Tình nhân")) throw new BusinessException("Số phòng, loại hoặc giá phòng không hợp lệ.");
+        if(room.Number.Length is <1 or >10 || room.Rate==0 || room.Type is not ("Đơn" or "Đôi" or "VIP")) throw new BusinessException("Số phòng, loại hoặc giá phòng không hợp lệ.");
         if((await db.RoomsAsync()).Any(x=>x.Id!=room.Id && x.Number.Equals(room.Number,StringComparison.OrdinalIgnoreCase))) throw new BusinessException("Số phòng đã tồn tại.");
         if(room.Id!=0)
         {
@@ -148,7 +200,7 @@ public sealed partial class HotelService
         if(rate is null && deposit is null && type is null) throw new BusinessException("Chọn ít nhất một thông tin cần thay đổi.");
         if(rate is { } newRate){ValidateMoney(newRate);if(newRate==0)throw new BusinessException("Giá phòng phải lớn hơn 0.");}
         if(deposit is { } newDeposit)ValidateMoney(newDeposit);
-        if(type is not null && type is not ("Đơn" or "Đôi" or "VIP" or "Tình nhân")) throw new BusinessException("Loại phòng không hợp lệ.");
+        if(type is not null && type is not ("Đơn" or "Đôi" or "VIP")) throw new BusinessException("Loại phòng không hợp lệ.");
         var active=(await db.ActiveStaysAsync()).Select(s=>s.RoomId).ToHashSet();
         foreach(var original in selected)
         {

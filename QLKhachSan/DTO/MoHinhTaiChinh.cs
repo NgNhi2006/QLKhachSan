@@ -18,6 +18,16 @@ public sealed record Debt(long Id, string Type, string Counterparty, long? Invoi
 }
 public sealed record StockItem(int Id, int? ServiceId, string Name, string Unit, decimal Quantity,
     decimal AverageCost, decimal ReorderLevel, bool Active);
+public sealed record ServiceStockAvailability(int ServiceId,string ServiceName,string Category,string Unit,
+    string? StockName,decimal? OnHand,decimal Reserved,decimal? Available,decimal? ReorderLevel)
+{
+    public string Status => Available is null ? "Chưa theo dõi kho" : Available<=0 ? "Hết hàng" :
+        Available<=ReorderLevel ? "Sắp hết" : "Còn hàng";
+}
+public sealed record RentalOut(long OrderId,string Room,string Guest,string Service,int Delivered,int Returned,DateTime? DeliveredAt)
+{
+    public int Outstanding=>Delivered-Returned;
+}
 public sealed record StockMovement(long Id, DateTime HappenedAt, string Item, string Kind,
     decimal Quantity, decimal UnitCost, string Reason);
 public sealed record MinibarReconciliation(string Item, decimal Billed, decimal Housekeeping,

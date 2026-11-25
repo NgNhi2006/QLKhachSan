@@ -50,7 +50,7 @@ public partial class ucDashboard
     {
         ExcelExport.ExportGrid(this,grid,filename,ServerNow);
     }
-    private void PrintInvoice(Invoice invoice,Stay stay,IReadOnlyList<ServiceLine> services)
+    private void PrintInvoice(Invoice invoice,Stay stay,IReadOnlyList<ServiceLine> services,InvoiceDiscount? discount=null)
     {
         var settings=AppSettings.Load();
         var items=services.Where(s=>s.Cancelled is null).ToArray();
@@ -97,15 +97,20 @@ public partial class ucDashboard
             Text($"Phòng: {invoice.Room}",normal,left,y,half);Text($"Hình thức: {invoice.Method}",normal,second,y,half);y+=28;
             Rule(y);y+=8;
             Text("STT",bold,left,y,35);Text("Hạng mục",bold,left+38,y,bounds.Width-260);Text("SL",bold,right-218,y,45,StringAlignment.Far);Text("Đơn giá",bold,right-168,y,78,StringAlignment.Far);Text("Thành tiền",bold,right-83,y,83,StringAlignment.Far);y+=23;Rule(y);y+=7;
-            if(index==0){Text("1",normal,left,y,35);Text("Tiền phòng",normal,left+38,y,bounds.Width-260);Text(invoice.RoomCharge.ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;}
+            if(index==0){Text("1",normal,left,y,35);Text("Tiền phòng",normal,left+38,y,bounds.Width-260);Text((discount?.GrossRoom??invoice.RoomCharge).ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;}
             while(index<items.Length && y+215<bounds.Bottom)
             {
                 var item=items[index];Text((index+2).ToString(),normal,left,y,35);Text(item.Name,normal,left+38,y,bounds.Width-260);
-                Text(item.Quantity.ToString(),normal,right-218,y,45,StringAlignment.Far);Text(item.Price.ToString("N0"),normal,right-168,y,78,StringAlignment.Far);Text(item.Total.ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;index++;
+                Text(item.Quantity.ToString(),normal,right-218,y,45,StringAlignment.Far);Text(item.BilledAmount is null || item.BilledAmount==item.Quantity*item.Price?item.Price.ToString("N0"):"Đã chỉnh",normal,right-168,y,78,StringAlignment.Far);Text(item.Total.ToString("N0"),normal,right-83,y,83,StringAlignment.Far);y+=25;index++;
             }
             if(index<items.Length){e.HasMorePages=true;return;}
             Rule(y);y+=12;
             void Amount(string label,decimal value,bool emphasize=false){Text(label,emphasize?bold:normal,right-300,y,205,StringAlignment.Far);Text(value.ToString("N0")+" đ",emphasize?bold:normal,right-90,y,90,StringAlignment.Far);y+=23;}
+            if(discount is not null)
+            {
+                Amount("Tạm tính",discount.GrossRoom+items.Sum(x=>x.Total));
+                Amount($"Giảm giá {discount.Code}",-discount.Amount);
+            }
             Amount("Tiền phòng",invoice.RoomCharge);Amount("Dịch vụ",invoice.ServiceCharge);Amount("TỔNG HÓA ĐƠN",invoice.Total,true);Amount("Cọc đã thu",invoice.Deposit);Amount("Cần thu sau cọc",Math.Max(0,invoice.Total-invoice.Deposit),true);Amount("Đã thu thêm",invoice.Collected);Amount("Hoàn khách",invoice.Refunded);
             y+=10;Rule(y);y+=12;Text("Thu ngân",bold,left+35,y,170,StringAlignment.Center);Text("Khách hàng",bold,right-205,y,170,StringAlignment.Center);y+=22;
             Text("(Ký, ghi rõ họ tên)",normal,left+35,y,170,StringAlignment.Center);Text("(Ký, ghi rõ họ tên)",normal,right-205,y,170,StringAlignment.Center);

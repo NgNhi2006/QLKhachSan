@@ -31,7 +31,6 @@ public sealed partial class HotelService
         FunctionPolicy.Require(user,"shift.manage");
         if(user.Role is not ("Admin" or "Reception" or "Accountant" or "Manager"))throw new BusinessException("Không có quyền mở ca.");
         if(opening<0 || opening>1_000_000_000_000m)throw new BusinessException("Tiền đầu ca không hợp lệ.");
-        await db.RequireOpenPeriodAsync(await db.NowAsync());
         var id=await db.OpenShiftAsync(user.Id,opening);
         await db.AuditAsync(user,"OpenShift",$"Ca {id}; đầu ca {opening:N0}");
         return id;
@@ -43,31 +42,22 @@ public sealed partial class HotelService
         if(user.Role is not ("Admin" or "Reception" or "Accountant" or "Manager"))throw new BusinessException("Không có quyền chốt ca.");
         if(counted<0 || counted>1_000_000_000_000m)throw new BusinessException("Tiền đếm thực tế không hợp lệ.");
         var shift=await db.ShiftIdentityAsync(id);
-        if(shift.CashierId!=user.Id || shift.Status!="Open")throw new BusinessException("Chỉ người mở ca được nộp ca đang mở.");
+        if(shift.Status!="Open")throw new BusinessException("Chỉ nộp được ca đang mở.");
+        if(shift.CashierId!=user.Id && user.Role!="Admin")throw new BusinessException("Chỉ người mở ca hoặc quản trị viên mới được bàn giao ca.");
         var expected=await db.ExpectedCashAsync(id);
         if(counted!=expected)explanation=Required(explanation,350,"Giải trình chênh lệch");
-        else if(explanation.Trim().Length>350)throw new BusinessException("Giải trình tối đa 350 ký tự.");
+        else if(string.IsNullOrWhiteSpace(explanation)) explanation = "Số liệu khớp dự kiến";
         if(await db.SubmitShiftAsync(id,counted,expected,explanation.Trim())!=1)throw new BusinessException("Ca đã thay đổi.");
         return await db.AuditAsync(user,"SubmitShift",$"Ca {id}; lý thuyết {expected:N0}; đếm {counted:N0}; chênh {counted-expected:N0}; {explanation}");
     });
     public Task LockCashShiftAsync(long id) => FinanceWrite(async db=>
     {
-        if(user.Role is not ("Admin" or "Accountant"))throw new BusinessException("Chỉ Kế toán được khóa ca.");
-        if(await db.PendingOrdersInShiftAsync(id)>0)throw new BusinessException("Ca còn dịch vụ chưa giao hoặc chưa hủy; xử lý xong trước khi khóa.");
+        if(user.Role is not ("Admin" or "Accountant" or "Manager"))throw new BusinessException("Chỉ Quản trị viên hoặc Kế toán được khóa ca.");
         if(await db.LockShiftAsync(id,user.Id)!=1)throw new BusinessException("Chỉ khóa được ca đã bàn giao.");
         return await db.AuditAsync(user,"LockShift",$"Ca {id}");
     });
-    public Task LockAccountingPeriodAsync(DateTime month,string note) => FinanceWrite(async db=>
-    {
-        if(user.Role is not ("Admin" or "Accountant"))throw new BusinessException("Chỉ Kế toán được khóa kỳ.");
-        if(month.Year<2020 || month.Year>2100)throw new BusinessException("Kỳ kế toán không hợp lệ.");
-        var now=await db.NowAsync();
-        if(new DateTime(month.Year,month.Month,1)>=new DateTime(now.Year,now.Month,1))throw new BusinessException("Chỉ được khóa tháng đã kết thúc.");
-        note=Required(note,300,"Ghi chú khóa kỳ");
-        if(await db.UnlockedShiftsInMonthAsync(month)>0)throw new BusinessException("Còn ca trong tháng chưa được Kế toán khóa.");
-        await db.LockPeriodAsync(month,user.Id,note);
-        return await db.AuditAsync(user,"LockPeriod",$"{month:MM/yyyy}; {note}");
-    });
+    public Task LockAccountingPeriodAsync(DateTime month,string note) =>
+        Task.FromException(new BusinessException("Tính năng khóa kỳ không có trong bản CSDL gọn."));
     public Task<List<Voucher>> VouchersAsync(DateTime from,DateTime through) => FinanceRead(db=>db.VouchersAsync(from.Date,through.Date.AddDays(1)));
     public Task<List<BankStatementLine>> BankLinesAsync(DateTime from,DateTime through) => FinanceRead(db=>db.BankLinesAsync(from.Date,through.Date.AddDays(1)));
     public Task<int> ReconcilePendingBankAsync() => FinanceWrite(async db=>
@@ -153,7 +143,11 @@ public sealed partial class HotelService
         return await db.AuditAsync(user,"DebtAllocation",$"Nợ {debtId}; phiếu {voucherId}; {amount:N0}");
     });
     public Task<List<StockItem>> StockAsync() => FinanceRead(db=>db.StockAsync());
-    public Task<List<ServiceItem>> StockLinkableServicesAsync() => FinanceRead(db=>db.MenuAsync());
+    public Task<List<ServiceItem>> StockLinkableServicesAsync() => FinanceRead(async db=>
+    {
+        var linked=(await db.StockAsync()).Where(x=>x.ServiceId is not null).Select(x=>x.ServiceId!.Value).ToHashSet();
+        return (await db.MenuAsync()).Where(x=>!linked.Contains(x.Id)).ToList();
+    });
     public Task<List<StockMovement>> StockMovementsAsync(DateTime from,DateTime through) => FinanceRead(db=>db.StockMovementsAsync(from.Date,through.Date.AddDays(1)));
     public Task<List<MinibarReconciliation>> ReconcileMinibarAsync(DateTime from,DateTime through) => FinanceRead(db=>db.ReconcileMinibarAsync(from.Date,through.Date.AddDays(1)));
     public Task AddStockItemAsync(string name,string unit,int? serviceId,decimal reorder) => FinanceWrite(async db=>
@@ -168,9 +162,17 @@ public sealed partial class HotelService
         if(kind is not ("Purchase" or "Spoilage" or "Internal" or "Adjustment"))throw new BusinessException("Loại xuất nhập không hợp lệ.");
         Positive(quantity);if(unitCost<0)throw new BusinessException("Giá vốn không hợp lệ.");
         reason=Required(reason,400,"Lý do");var item=(await db.StockAsync()).SingleOrDefault(x=>x.Id==itemId)??throw new BusinessException("Mặt hàng không tồn tại.");
+        if(item.Unit.Equals("xe",StringComparison.OrdinalIgnoreCase) && quantity!=decimal.Truncate(quantity))
+            throw new BusinessException("Số lượng xe phải là số nguyên.");
         var now=await db.NowAsync();await db.RequireOpenPeriodAsync(now);
         var delta=kind=="Purchase"?quantity:kind=="Adjustment"?quantity:-quantity;
         if(item.Quantity+delta<0)throw new BusinessException("Không đủ tồn kho.");
+        if(item.Active && item.ServiceId is int serviceId && delta<0)
+        {
+            var reserved=(await db.ReservedServiceStockAsync()).FirstOrDefault(x=>x.ServiceId==serviceId).Quantity;
+            if(item.Quantity+delta<reserved)
+                throw new BusinessException($"{item.Name} còn {reserved:N0} đang chờ giao; không thể xuất làm thiếu hàng đã nhận gọi.");
+        }
         var average=kind=="Purchase"?(item.Quantity*item.AverageCost+quantity*unitCost)/(item.Quantity+quantity):item.AverageCost;
         await db.UpdateStockAsync(itemId,item.Quantity+delta,decimal.Round(average,2));
         await db.MoveStockAsync(itemId,kind,delta,kind=="Purchase"?unitCost:item.AverageCost,reason,user.Id);

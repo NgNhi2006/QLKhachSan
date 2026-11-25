@@ -12,6 +12,7 @@ public partial class ucDashboard
     private TextBox? reservedBookingSearch;
     private Label? reservedBookingCount;
     private Button? reservedBookingAction;
+    private Button? reservedBookingAllAction;
     private string? reservedBookingFunction;
 
     private void ShowReservedBookingScreen(string code)
@@ -79,6 +80,13 @@ public partial class ucDashboard
         };
         footer.Controls.Add(depositHistory);
         footer.Controls.Add(reservedBookingAction);
+        if(code=="room.checkin")
+        {
+            reservedBookingAllAction=new Button {Text="NHẬN TẤT CẢ PHÒNG",Dock=DockStyle.Right,Width=220};
+            AppTheme.Button(reservedBookingAllAction,true);
+            footer.Controls.Add(reservedBookingAllAction);
+            reservedBookingAllAction.Click+=async (_,_)=>await SelectAllReservedBookings();
+        }
         layout.Controls.Add(footer, 0, 3);
 
         reservedBookingSearch.TextChanged += (_, _) => RefreshReservedBookings();
@@ -171,6 +179,94 @@ public partial class ucDashboard
             reservedBookingGrid is null || reservedBookingGrid.IsDisposed) return;
         reservedBookingAction.Enabled = reservedBookingGrid.CurrentRow?.DataBoundItem is ReservedBookingRow row &&
             (reservedBookingFunction == "room.booking_cancel" || row.TìnhTrạng != "Quá hạn nhận");
+        if(reservedBookingAllAction is {IsDisposed:false})
+            reservedBookingAllAction.Enabled=reservedBookingGrid.CurrentRow?.DataBoundItem is ReservedBookingRow selected &&
+                RelatedReservations(selected.Id) is {Count:>1} group && group.All(x=>x.HoldUntil>ServerNow);
+    }
+
+    private List<Stay> RelatedReservations(long stayId)
+    {
+        var selected=data.Stays.SingleOrDefault(x=>x.Id==stayId && x.Status==StayStatus.Reserved);
+        if(selected is null)return [];
+        return data.Stays.Where(x=>x.Status==StayStatus.Reserved &&
+            x.CustomerId==selected.CustomerId && x.Created==selected.Created &&
+            x.Arrival==selected.Arrival && x.Departure==selected.Departure)
+            .OrderBy(x=>StayRoom(x)?.Number).ToList();
+    }
+
+    private void ConfigureScheduleCheckInAction(DataGridView grid,string columnName)
+    {
+        if(grid.Columns[columnName] is not DataGridViewButtonColumn column)return;
+        column.UseColumnTextForButtonValue=false;
+        column.AutoSizeMode=DataGridViewAutoSizeColumnMode.None;
+        column.Width=145;
+    }
+
+    private void FormatScheduleCheckInCell(object? sender,DataGridViewCellFormattingEventArgs e)
+    {
+        if(sender is not DataGridView grid || e.RowIndex<0 || e.ColumnIndex<0 ||
+            grid.Columns[e.ColumnIndex].Name is not ("checkin" or "action"))return;
+        var id=grid.Rows[e.RowIndex].DataBoundItem switch
+        {
+            BookingRow booking=>booking.Id,
+            ScheduleRow schedule=>schedule.Id,
+            _=>0
+        };
+        var group=RelatedReservations(id);
+        e.Value=group.Count>1?"Nhận phòng ▾":"Nhận phòng";
+        e.FormattingApplied=true;
+    }
+
+    private async Task ShowScheduleCheckInOptions(DataGridView grid,int rowIndex,int columnIndex,Stay stay)
+    {
+        var group=RelatedReservations(stay.Id);
+        if(group.Count<2)
+        {
+            await Run(async()=>
+            {
+                if(Ui.Confirm(this,$"Nhận phòng {StayRoom(stay)?.Number} cho {stay.Guest}?"))
+                    await Changed(()=>service.CheckInAsync(stay));
+            });
+            return;
+        }
+        var menu=new ContextMenuStrip();
+        menu.Font=AppTheme.Body;
+        menu.Items.Add($"Nhận riêng phòng {StayRoom(stay)?.Number}");
+        menu.Items.Add($"Nhận cả {group.Count} phòng của {stay.Guest}");
+        menu.Items[0].Click+=async (_,_)=>await Run(async()=>
+        {
+            if(Ui.Confirm(this,$"Nhận phòng {StayRoom(stay)?.Number} cho {stay.Guest}?"))
+                await Changed(()=>service.CheckInAsync(stay));
+        });
+        menu.Items[1].Click+=async (_,_)=>await CheckInScheduleGroup(stay.Id);
+        // Show can synchronously close a drop-down while its native handle is being created.
+        // Dispose on the next UI turn so WinForms finishes Show before the handle is released.
+        menu.Closed+=(_,_)=>
+        {
+            if(!IsDisposed && IsHandleCreated)BeginInvoke(new Action(menu.Dispose));
+            else menu.Dispose();
+        };
+        var cell=grid.GetCellDisplayRectangle(columnIndex,rowIndex,true);
+        menu.Show(grid,new Point(cell.Left,cell.Bottom));
+    }
+
+    private async Task CheckInScheduleGroup(long stayId)
+    {
+        var stays=RelatedReservations(stayId);
+        if(stays.Count<2)return;
+        var rooms=string.Join(", ",stays.Select(x=>StayRoom(x)?.Number??"?"));
+        await Run(async()=>
+        {
+            if(Ui.Confirm(this,$"Nhận tất cả {stays.Count} phòng cho {stays[0].Guest}?\nPhòng: {rooms}"))
+                await Changed(()=>service.CheckInMultipleAsync(stays));
+        });
+    }
+
+    private async Task SelectAllReservedBookings()
+    {
+        if(reservedBookingGrid?.CurrentRow?.DataBoundItem is not ReservedBookingRow row)return;
+        await CheckInScheduleGroup(row.Id);
+        RefreshReservedBookings();
     }
 
     private async Task SelectReservedBooking()

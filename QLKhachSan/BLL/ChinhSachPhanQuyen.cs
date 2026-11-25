@@ -27,8 +27,9 @@ public static class FunctionPolicy
         new("room.pricing", "Bảng giá", "rooms", "Danh mục phòng", "Admin,Manager"),
         new("service.order", "Gọi dịch vụ", "services", "Yêu cầu dịch vụ", "Admin,Reception"),
         new("service.manage", "Xử lý dịch vụ", "services", "Yêu cầu dịch vụ", "Admin,Reception"),
+        new("service.inventory", "Tồn kho dịch vụ", "services", "Kho dịch vụ", "Admin,Reception,Accountant,Manager"),
         new("service.catalog", "Danh mục dịch vụ", "services", "Danh mục dịch vụ", "Admin,Manager"),
-        new("service.stock", "Kho minibar", "services", "Kho dịch vụ", "Admin,Accountant,Manager"),
+        new("service.stock", "Nhập / xuất kho minibar", "services", "Kho dịch vụ", "Admin,Accountant,Manager"),
         new("customer.profile", "Hồ sơ khách hàng", "customers", "Hồ sơ", "Admin,Reception,Manager"),
         new("customer.history", "Lịch sử khách", "customers", "Lịch sử", "Admin,Reception,Manager"),
         new("shift.manage", "Ca trực / bàn giao", "shifts", "Ca trực", "Admin,Reception,Accountant,Manager"),
@@ -43,20 +44,28 @@ public static class FunctionPolicy
         new("report.revenue", "Biểu đồ doanh thu", "reports", "Doanh thu", "Admin,Accountant,Manager"),
         new("report.profit", "Lãi lỗ", "reports", "Lãi lỗ", "Admin,Accountant,Manager"),
         new("staff.view", "Danh sách nhân viên", "staff", "Nhân viên", "Admin,Manager"),
-        new("staff.manage", "Tài khoản & phân quyền", "staff", "Phân quyền", "Admin"),
-        new("system.password", "Đổi mật khẩu", "system", "Tài khoản", "Admin,Reception,Accountant,Manager"),
+        new("staff.manage", "Nhân viên & phân quyền", "staff", "Nhân viên", "Admin"),
+        new("system.password", "Hồ sơ của tôi", "system", "Tài khoản", "Admin,Reception,Accountant,Manager"),
         new("system.audit", "Nhật ký thao tác", "system", "Nhật ký", "Admin,Manager")
     ];
 
     private static readonly Dictionary<string, FunctionDefinition> ByCode = All.ToDictionary(x => x.Code);
+    private static readonly HashSet<string> RemovedFeatures = new(StringComparer.Ordinal)
+    {
+        "cash.book", "cash.bank", "cash.debt", "invoice.control", "invoice.groups", "report.profit",
+        "service.order", "service.manage", "service.inventory", "service.catalog", "service.stock"
+    };
     private static readonly Dictionary<string, string[]> MethodAccess = new(StringComparer.Ordinal)
     {
         ["CustomersAsync"]=["customer.profile"], ["CustomerInvoicesAsync"]=["customer.profile"],
         ["CustomerOrdersAsync"]=["customer.profile"], ["InvoicesAsync"]=["invoice.list"],
         ["RevenueAsync"]=["report.revenue","invoice.list"], ["ReportAsync"]=["report.revenue","invoice.list"],
-        ["CreateStayAsync"]=["room.walkin","room.reserve"], ["CreateStaysAsync"]=["room.walkin","room.reserve"], ["CheckInAsync"]=["room.checkin"],
+        ["RevenueEventsAsync"]=["report.revenue"],
+        ["LifetimeRevenueAsync"]=["report.revenue"],
+        ["CreateStayAsync"]=["room.walkin","room.reserve"], ["CreateStaysAsync"]=["room.walkin","room.reserve"], ["CheckInAsync"]=["room.checkin"], ["CheckInMultipleAsync"]=["room.checkin"],
         ["CancelAsync"]=["room.booking_cancel"], ["TransferAsync"]=["room.transfer"],
         ["ExtendAsync"]=["room.extend"], ["AddServicesAsync"]=["service.order"],
+        ["AddServicesForRoomsAsync"]=["service.order"],
         ["DeliverAsync"]=["service.manage"], ["SetRoomStatusAsync"]=["room.clean","room.maintain"],
         ["CleanAllAsync"]=["room.clean"], ["QuoteAsync"]=["room.checkout","invoice.create"],
         ["CheckoutAsync"]=["room.checkout","invoice.create"], ["RefundQuoteAsync"]=["room.booking_cancel"],
@@ -65,9 +74,12 @@ public static class FunctionPolicy
         ["DepositHistoryAsync"]=["room.deposit","room.history","customer.history"],
         ["DepositReceiptsAsync"]=["invoice.list"],
         ["StayOrdersAsync"]=["service.manage"], ["UpdateBookingAsync"]=["room.booking_edit"],
+        ["UpdateOccupiedGuestAsync"]=["room.booking_edit"],
+        ["CancelUnbilledOccupiedAsync"]=["room.booking_cancel"],
         ["PeriodReportAsync"]=["invoice.list","cash.flow"], ["InvoiceStayAsync"]=["invoice.list"],
         ["InvoiceOrdersAsync"]=["invoice.list"], ["AddDepositAsync"]=["room.deposit"],
         ["ChangeOrderAsync"]=["service.manage"], ["DeliverOrderAsync"]=["service.manage"],
+        ["MoveOrderAsync"]=["service.manage"],
         ["CancelPendingOrdersAsync"]=["service.manage"],
         ["CatalogAsync"]=["service.catalog"],
         ["SaveServiceAsync"]=["service.catalog"],
@@ -82,6 +94,9 @@ public static class FunctionPolicy
         ["BookAsync"]=["cash.book"], ["SetOpeningBalanceAsync"]=["cash.book"],
         ["PostVoucherAsync"]=["cash.book"], ["DebtsAsync"]=["cash.debt"],
         ["CreateDebtAsync"]=["cash.debt"], ["AllocateDebtAsync"]=["cash.debt"],
+        ["ServiceStockAvailabilityAsync"]=["service.order","service.manage","service.catalog","service.stock"],
+        ["RentalOutAsync"]=["service.order","service.manage","service.stock"],
+        ["ReturnRentalAsync"]=["service.manage","service.order"],
         ["StockAsync"]=["service.stock"], ["StockMovementsAsync"]=["service.stock"],
         ["StockLinkableServicesAsync"]=["service.stock"],
         ["ReconcileMinibarAsync"]=["service.stock"], ["AddStockItemAsync"]=["service.stock"],
@@ -89,11 +104,14 @@ public static class FunctionPolicy
         ["FinanceSummaryAsync"]=["report.profit"], ["BillSharesAsync"]=["invoice.groups"],
         ["GroupInvoicesAsync"]=["invoice.groups"],
         ["VoidInvoiceAsync"]=["invoice.control"], ["AddInvoiceAdjustmentAsync"]=["invoice.control"],
-        ["MarkEInvoiceAsync"]=["invoice.control"], ["GroupBillsAsync"]=["invoice.groups"]
+        ["MarkEInvoiceAsync"]=["invoice.control"], ["GroupBillsAsync"]=["invoice.groups"],
+        ["PreviewDiscountAsync"]=["room.checkout","invoice.create"],
+        ["DiscountCodesAsync"]=["invoice.control"], ["SaveDiscountCodeAsync"]=["invoice.control"],
+        ["InvoiceDiscountAsync"]=["invoice.list"]
     };
 
     public static bool RoleAllows(string role, string code) =>
-        ByCode.TryGetValue(code, out var function) && function.Roles.Split(',').Contains(role);
+        !RemovedFeatures.Contains(code) && ByCode.TryGetValue(code, out var function) && function.Roles.Split(',').Contains(role);
 
     public static bool Can(UserSession user, string code) => RoleAllows(user.Role, code)
         && (user.GrantedFunctions is null || user.GrantedFunctions.Contains(code));
@@ -110,6 +128,8 @@ public static class FunctionPolicy
 
     public static void RequireMethod(UserSession user, string method)
     {
+        if (method is "GroupQuoteAsync" or "GroupCheckoutAsync" or "ReportHousekeepingAsync")
+            throw new BusinessException("Chức năng này không có trong bản CSDL gọn.");
         if (method is "DashboardAsync" or "ServerNowAsync" or "ExpireReservationsAsync") return;
         if (!MethodAccess.TryGetValue(method, out var codes) || !codes.Any(code => Can(user, code)))
             throw new BusinessException("Bạn không được cấp quyền sử dụng chức năng này.");

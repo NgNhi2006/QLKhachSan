@@ -26,6 +26,12 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
     public Task<List<ServiceLine>> CustomerOrdersAsync(int customer) => OperationsRead(db=>db.CustomerOrdersAsync(customer));
     public Task<List<Invoice>> InvoicesAsync(DateTime date) => FinanceRead(db=>db.InvoicesAsync(date));
     public Task<List<RevenueItem>> RevenueAsync(DateTime date) => FinanceRead(db=>db.RevenueAsync(date));
+    public Task<List<RevenueEvent>> RevenueEventsAsync(DateTime from, DateTime until) => FinanceRead(db=>db.RevenueEventsAsync(from,until));
+    public Task<List<RevenueItem>> LifetimeRevenueAsync() => FinanceRead(async db=>
+    {
+        var now=await db.NowAsync();
+        return await db.RevenueAsync(new DateTime(1753,1,1),now.AddTicks(1));
+    });
     public Task<DailyReport> ReportAsync(DateTime date) => FinanceRead(async db=>new DailyReport(await db.InvoicesAsync(date),await db.RevenueAsync(date)));
     public static GuestInput ValidateGuest(GuestInput guest)
     {
@@ -37,7 +43,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
     }
     private static void Method(string method)
     {
-        if(method is not ("Tiền mặt" or "Chuyển khoản" or "Thẻ POS" or "Công nợ OTA")) throw new BusinessException("Phương thức thanh toán không hợp lệ.");
+        if(method is not ("Tiền mặt" or "Chuyển khoản" or "Thẻ POS")) throw new BusinessException("Chọn Tiền mặt, Chuyển khoản hoặc Thẻ POS.");
     }
     private static void RoomUnchanged(Room actual,Room expected,RoomStatus required)
     {
@@ -178,6 +184,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         if(items.Count is <1 or >100 || items.Any(x=>x.Quantity is <1 or >100)) throw new BusinessException("Giỏ dịch vụ không hợp lệ (1–100 dòng, mỗi dòng 1–100 đơn vị).");
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Occupied);
         var menu=(await db.MenuAsync()).ToDictionary(x=>x.Id); var now=await db.NowAsync();
+        await EnsureServiceStockAsync(db,items.Select(x=>(x.ServiceId,x.Quantity)));
         foreach(var item in items)
         {
             if(!menu.TryGetValue(item.ServiceId,out var service)) throw new BusinessException("Dịch vụ đã ngừng cung cấp.");
@@ -186,13 +193,76 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         await db.TouchStayAsync(stay.Id);
         return await db.AuditAsync(user,"Service",$"Lượt {stay.Id}; {items.Count} dòng dịch vụ");
     });
+    public Task AddServicesForRoomsAsync(IReadOnlyList<OrderAssignment> assignments) => Write(async db=>
+    {
+        if(assignments.Count is <1 or >100 || assignments.Any(x=>x.Quantity is <1 or >100))
+            throw new BusinessException("Giỏ dịch vụ cần 1–100 dòng, mỗi dòng 1–100 đơn vị.");
+        var menu=(await db.MenuAsync()).ToDictionary(x=>x.Id);
+        var now=await db.NowAsync();
+        await EnsureServiceStockAsync(db,assignments.Select(x=>(x.ServiceId,x.Quantity)));
+        foreach(var group in assignments.GroupBy(x=>x.Stay.Id))
+        {
+            var expected=group.First().Stay;
+            if(group.Any(x=>x.Stay.Version!=expected.Version))
+                throw new BusinessException("Thông tin phòng trong giỏ đã thay đổi. Hãy tạo lại yêu cầu.");
+            var stay=await db.StayAsync(expected.Id);
+            StayUnchanged(stay,expected,StayStatus.Occupied);
+            foreach(var line in group)
+            {
+                if(!menu.TryGetValue(line.ServiceId,out var service))
+                    throw new BusinessException("Dịch vụ đã ngừng cung cấp.");
+                await db.AddOrderAsync(stay.Id,service,line.Quantity,now,user);
+            }
+            await db.TouchStayAsync(stay.Id);
+        }
+        return await db.AuditAsync(user,"Service",
+            $"Gọi {assignments.Count} dòng dịch vụ cho {assignments.Select(x=>x.Stay.Id).Distinct().Count()} phòng");
+    });
     public Task DeliverAsync(Stay selected) => Write(async db=>
     {
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Occupied);
-        foreach(var line in (await db.OrdersAsync(stay.Id)).Where(x=>x.DeliveredQuantity<x.Quantity))
-            await db.ConsumeOrderStockAsync(line.Id,line.Quantity-line.DeliveredQuantity,user.Id);
-        await db.DeliverAsync(stay.Id,await db.NowAsync()); await db.TouchStayAsync(stay.Id);
-        return await db.AuditAsync(user,"Deliver",$"Lượt {stay.Id}: giao tất cả yêu cầu đang chờ");
+        var pending=(await db.OrdersAsync(stay.Id)).Where(x=>x.DeliveredQuantity<x.Quantity).ToList();
+        if(pending.Count==0)throw new BusinessException("Không còn dịch vụ nào đang chờ giao.");
+        var now=await db.NowAsync();
+        foreach(var line in pending)
+        {
+            var remaining=line.Quantity-line.DeliveredQuantity;
+            await db.ConsumeOrderStockAsync(line.Id,remaining,user.Id);
+            await db.DeliverOrderAsync(line.Id,remaining,now);
+        }
+        await db.TouchStayAsync(stay.Id);
+        return await db.AuditAsync(user,"Deliver",$"Lượt {stay.Id}: giao {pending.Count} dòng dịch vụ còn chờ");
+    });
+    public Task CheckInMultipleAsync(IReadOnlyList<Stay> selected) => Write(async db=>
+    {
+        if(selected.Count<2 || selected.Select(x=>x.Id).Distinct().Count()!=selected.Count)
+            throw new BusinessException("Chọn ít nhất hai lượt đặt khác nhau.");
+        var first=selected[0];
+        if(selected.Any(x=>x.CustomerId!=first.CustomerId || x.Created!=first.Created ||
+            x.Arrival!=first.Arrival || x.Departure!=first.Departure))
+            throw new BusinessException("Các phòng không thuộc cùng một lượt đặt nhiều phòng.");
+        var now=await db.NowAsync();
+        var checkedRooms=new List<(Stay Stay,Room Room)>();
+        foreach(var expected in selected)
+        {
+            var stay=await db.StayAsync(expected.Id);StayUnchanged(stay,expected,StayStatus.Reserved);
+            if(stay.CustomerId!=first.CustomerId || stay.Created!=first.Created ||
+                stay.Arrival!=first.Arrival || stay.Departure!=first.Departure)
+                throw new BusinessException("Nhóm đặt phòng đã thay đổi. Hãy làm mới danh sách.");
+            if(stay.HoldUntil<=now)throw new BusinessException("Có phòng đã quá hạn nhận. Hãy làm mới để xử lý quá hạn.");
+            var room=await db.RoomAsync(stay.RoomId);
+            if(room.Status!=RoomStatus.Trong)throw new BusinessException($"Phòng {room.Number} chưa trống hoặc chưa dọn xong.");
+            await db.EnsureAvailableAsync(room.Id,now,now.Add(stay.Departure-stay.Arrival),stay.Id);
+            checkedRooms.Add((stay,room));
+        }
+        foreach(var (stay,room) in checkedRooms)
+        {
+            await db.CheckInAsync(stay,now,now.Add(stay.Departure-stay.Arrival));
+            await db.StartSegmentAsync(stay.Id,room,now);
+            await db.SetRoomAsync(room,RoomStatus.DangO);
+        }
+        await db.AuditAsync(user,"CheckInMultiple",$"Khách {first.Guest}; {selected.Count} phòng; lượt {string.Join(',',selected.Select(x=>x.Id))}");
+        return 0;
     });
     public Task SetRoomStatusAsync(Room selected,RoomStatus next) => repository.RunAsync(true,async db=>
     {
@@ -225,6 +295,42 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         var lines=await db.OrdersAsync(stay.Id);
         return new BillQuote(stay,room,at,BillingPolicy.RoomCharge(await db.SegmentsAsync(stay.Id),at),lines.Sum(x=>x.Total),lines);
     }
+    private static BillQuote ValidateCheckoutDraft(BillQuote source,BillQuote displayed)
+    {
+        if(source.RoomCharge!=(displayed.BaseRoomCharge??displayed.RoomCharge) ||
+           source.Services!=(displayed.BaseServices??displayed.Services) ||
+           !source.Lines.SequenceEqual(displayed.Lines))
+            throw new BusinessException("Các khoản trên bill đã thay đổi. Hãy lập lại bill tạm tính.");
+        if(displayed.DraftLines is not { } draft)
+        {
+            if(displayed.DiscountCode is not null || displayed.DiscountAmount!=0)
+                throw new BusinessException("Mã giảm giá cần được áp dụng trên bill tạm tính.");
+            return source;
+        }
+        if(string.IsNullOrWhiteSpace(displayed.EditReason) || displayed.EditReason.Trim().Length is <3 or >300)
+            throw new BusinessException("Cần ghi lý do sửa bill tạm tính.");
+        if(draft.Count is <1 or >100 || draft.Count(x=>x.Category=="Room")!=1 ||
+           draft.Any(x=>x.Name.Trim().Length is <2 or >150 || x.Quantity is <0 or >100 ||
+               x.UnitPrice<0 || x.UnitPrice>1_000_000_000 || x.UnitPrice!=decimal.Round(x.UnitPrice,0) ||
+               x.Total<0 || x.Total>1_000_000_000 || x.Total!=decimal.Round(x.Total,0) ||
+               (x.Quantity==0 && x.Total!=0) ||
+               x.Category is not ("Room" or "Service" or "Other") ||
+               (x.ServiceId is not null && (x.Category!="Service" || x.OrderId is not null))) ||
+           draft.Where(x=>x.OrderId is not null).Select(x=>x.OrderId).Distinct().Count()!=draft.Count(x=>x.OrderId is not null) ||
+           draft.Any(x=>x.OrderId is { } id && !source.Lines.Any(line=>line.Id==id)))
+            throw new BusinessException("Chi tiết bill tạm tính không hợp lệ.");
+        var roomLine=draft.Single(x=>x.Category=="Room");
+        if(roomLine.Quantity!=1 || roomLine.OrderId is not null || roomLine.Name!="Tiền phòng" ||
+           draft.Any(x=>x.Category=="Other" && (x.OrderId is not null || x.ServiceId is not null)))
+            throw new BusinessException("Dòng tiền phòng hoặc phụ thu không hợp lệ.");
+        var roomCharge=roomLine.Total;
+        var services=draft.Where(x=>x.Category!="Room").Sum(x=>x.Total);
+        ValidateMoney(roomCharge);ValidateMoney(services);
+        if(roomCharge!=displayed.RoomCharge || services!=displayed.Services)
+            throw new BusinessException("Tổng bill tạm tính không khớp chi tiết.");
+        return source with {RoomCharge=roomCharge,Services=services,DraftLines=draft,EditReason=displayed.EditReason,
+            DiscountCode=displayed.DiscountCode,DiscountAmount=displayed.DiscountAmount};
+    }
     public Task<BillQuote> QuoteAsync(Stay selected) => Read(async db=>
     {
         var stay=await db.StayAsync(selected.Id); StayUnchanged(stay,selected,StayStatus.Occupied);
@@ -236,10 +342,13 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
         var stay=await db.StayAsync(displayed.Stay.Id); StayUnchanged(stay,displayed.Stay,StayStatus.Occupied);
         var now=await db.NowAsync();
         if(displayed.At>now || now-displayed.At>TimeSpan.FromMinutes(10)) throw new BusinessException("Bảng tính tiền đã hết hạn 10 phút. Vui lòng lập lại.");
-        var bill=await Quote(db,stay,displayed.At);
-        if(bill.Lines.Any(x=>x.Delivered is null)) throw new BusinessException("Còn dịch vụ chưa giao. Hãy xử lý xong trước khi checkout.");
-        if(bill.Total!=displayed.Total || bill.ToCollect!=displayed.ToCollect || bill.ToRefund!=displayed.ToRefund) throw new BusinessException("Số tiền đã thay đổi. Hãy lập lại hóa đơn.");
+        var source=await Quote(db,stay,displayed.At);
+        if(source.Lines.Any(x=>x.Delivered is null)) throw new BusinessException("Còn dịch vụ chưa giao. Hãy xử lý xong trước khi checkout.");
+        var bill=await ApplyDiscountAsync(db,ValidateCheckoutDraft(source,displayed));
+        bill=await MaterializeCatalogLinesAsync(db,bill,now);
         var id=await db.InvoiceAsync(bill,method,user,now);
+        await db.SaveInvoiceDraftLinesAsync(id,bill);
+        if(bill.DiscountCode is { } code)await db.RedeemDiscountAsync(id,code,bill.DiscountAmount);
         if(await db.EndSegmentAsync(stay.Id,bill.At)!=1) throw new BusinessException("Thiếu giai đoạn lưu trú.");
         await db.CloseStayAsync(stay,true,bill.At);
         await db.PaymentAsync(stay.Id,"Checkout",bill.ToCollect,now,method,$"Hóa đơn {id}",user,reference);
@@ -247,7 +356,7 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
             await db.AddDebtAsync("AR",$"OTA {reference}",id,now.AddDays(30),bill.ToCollect,$"Cấn trừ OTA theo hóa đơn {id}",user.Id);
         await db.PaymentAsync(stay.Id,"Refund",bill.ToRefund,now,method,$"Hoàn cọc thừa hóa đơn {id}",user);
         await db.SetRoomAsync(bill.Room,RoomStatus.DangDon);
-        await db.AuditAsync(user,"Checkout",$"Hóa đơn {id}; lượt {stay.Id}");
+        await db.AuditAsync(user,"Checkout",$"Hóa đơn {id}; lượt {stay.Id}"+(bill.DraftLines is null?"":$"; sửa bill: {bill.EditReason}"));
         return id;
     });
     public Task<List<BillQuote>> GroupQuoteAsync(IReadOnlyList<Stay> selected) => Read(async db=>
@@ -283,17 +392,19 @@ public sealed partial class HotelService(HotelRepository repository, UserSession
             var stay=await db.StayAsync(original.Stay.Id);StayUnchanged(stay,original.Stay,StayStatus.Occupied);
             var bill=await Quote(db,stay,original.At);
             if(bill.Lines.Any(x=>x.Delivered is null))throw new BusinessException($"Phòng {bill.Room.Number} còn dịch vụ chưa giao.");
-            if(bill.Total!=original.Total || bill.Stay.Deposit!=original.Stay.Deposit ||
-               bill.ToCollect!=original.ToCollect || bill.ToRefund!=original.ToRefund)
-                throw new BusinessException($"Số tiền phòng {bill.Room.Number} đã thay đổi. Hãy lập lại phiếu tổng.");
-            quotes.Add(bill);
+            if(bill.Stay.Deposit!=original.Stay.Deposit)
+                throw new BusinessException($"Tiền cọc phòng {bill.Room.Number} đã thay đổi. Hãy lập lại phiếu tổng.");
+            quotes.Add(await ApplyDiscountAsync(db,ValidateCheckoutDraft(bill,original)));
         }
         var guest=quotes[0].Stay.Guest;
         var groupId=await db.NewBillGroupAsync($"Thanh toán khách {guest} · {now:dd/MM/yyyy HH:mm}",user.Id);
         var invoiceIds=new List<long>();
-        foreach(var bill in quotes)
+        foreach(var proposed in quotes)
         {
+            var bill=await MaterializeCatalogLinesAsync(db,proposed,now);
             var id=await db.InvoiceAsync(bill,method,user,now);invoiceIds.Add(id);
+            await db.SaveInvoiceDraftLinesAsync(id,bill);
+            if(bill.DiscountCode is { } code)await db.RedeemDiscountAsync(id,code,bill.DiscountAmount);
             if(await db.EndSegmentAsync(bill.Stay.Id,bill.At)!=1)throw new BusinessException("Thiếu giai đoạn lưu trú.");
             await db.CloseStayAsync(bill.Stay,true,bill.At);
             await db.SetRoomAsync(bill.Room,RoomStatus.DangDon);
