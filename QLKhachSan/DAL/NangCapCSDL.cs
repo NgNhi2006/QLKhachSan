@@ -29,13 +29,14 @@ public static class SchemaMigrator
         await connection.OpenAsync();
 
         var coreTables = "'Phong','KhachHang','TaiKhoanNhanVien','LuotLuuTru','HoaDon','CaTruc','GiaoDichThanhToan'";
-        await using (var schemaCheck = new SqlCommand($"SELECT COUNT(*), SUM(CASE WHEN name IN ({coreTables}) THEN 1 ELSE 0 END) FROM sys.tables WHERE schema_id=SCHEMA_ID('dbo') AND name<>N'sysdiagrams'", connection))
+        await using (var schemaCheck = new SqlCommand($"SELECT COUNT(*), SUM(CASE WHEN name IN ({coreTables}) THEN 1 ELSE 0 END), SUM(CASE WHEN name=N'PhienBanCSDL' THEN 1 ELSE 0 END) FROM sys.tables WHERE schema_id=SCHEMA_ID('dbo') AND name<>N'sysdiagrams'", connection))
         {
             await using var rows = await schemaCheck.ExecuteReaderAsync();
             await rows.ReadAsync();
             var total = rows.GetInt32(0);
             var core = rows.IsDBNull(1) ? 0 : rows.GetInt32(1);
-            if (total == 7 && core == 7)
+            var metadata = rows.IsDBNull(2) ? 0 : rows.GetInt32(2);
+            if (core == 7 && total == core + metadata)
             {
                 await rows.DisposeAsync();
                 await using var permissionColumn = new SqlCommand("IF COL_LENGTH(N'dbo.TaiKhoanNhanVien',N'QuyenChucNang') IS NULL ALTER TABLE dbo.TaiKhoanNhanVien ADD QuyenChucNang nvarchar(max) NULL", connection);
